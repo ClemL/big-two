@@ -6,3 +6,5 @@
 2026-09-03T20:15:00Z - Cards are now drawn as SVG: real pip layouts, mirrored corner indices, court designs and a patterned back.
 2026-09-03T20:15:00Z - Motion: hands deal in staggered, played cards fly in from the seat that threw them, turn markers pulse, dialogs fade in.
 2026-09-03T20:15:00Z - Sound effects for dealing, playing, passing, clearing the table and winning a round, with a mute toggle that is remembered.
+2026-09-03T21:40:00Z - CI now runs the typecheck, the test suite and the build on every pull request.
+2026-09-03T21:40:00Z - New Competitive opponent: plans the hand into the fewest possible plays and protects that plan. Wins about 48% of rounds against the simpler styles.

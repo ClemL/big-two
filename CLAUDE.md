@@ -38,8 +38,10 @@ lib/combos.ts   Combination detection, comparison, legal move generation
 lib/engine.ts   Round state machine: play, pass, trick clearing, round end
 lib/scoring.ts  Hong Kong penalty multipliers
 lib/ai.ts       Opponent policies
+lib/strategy.ts Exact minimum-plays hand decomposition
 lib/sound.ts    Web Audio sound effects
 public/         updates.txt (changelog)
+bench/          Self-play tournament between styles (npm run bench)
 test/           node:test unit tests, including simulated self-play rounds
 ```
 
@@ -54,10 +56,15 @@ update `test/` and the in-app rules panel in the same commit.
 * **Dealing is seeded.** `mulberry32` drives the shuffle so any round can be replayed by seed, which
   is what makes the self-play tests reproducible. Do not reach for `Math.random` inside `lib/`
   except as the caller-supplied default.
-* **The AI never passes while it holds a legal play.** This is the requested behavior, not an
-  oversight. Both styles are selections over the same `legalMovesFor` list.
-* **`legalMovesFor` returns ascending strength.** The "lowest legal play" AI and the Hint button both
-  depend on it, and a test asserts the ordering.
+* **No AI style passes while it holds a legal play.** This is the requested behavior, not an
+  oversight. It also survived measurement: a competitive variant that passes to protect its hand
+  wins more rounds but loses on chips, because the multipliers punish the hands it holds. If you
+  change this, re-run `npm run bench` and put the numbers in the commit message.
+* **`legalMovesFor` returns ascending strength.** The "lowest legal play" AI, the competitive AI's
+  tie-breaks and the Hint button all depend on it, and a test asserts the ordering.
+* **`lib/strategy.ts` solves for the true minimum, not a greedy partition.** The bitmask DP is what
+  makes the competitive tier work; a greedy decomposition gets hands like five pairs that are really
+  two straight flushes badly wrong. A test pins that case.
 * **Ruleset conventions that differ between houses** live in `lib/combos.ts` and are documented in
   `README.md` and `RulesPanel.tsx`. Two in particular: flushes compare by **suit first**, then rank;
   straights run over 3…A,2 with **no wrap-around**, so A-2-3-4-5 is not a straight. If you change
@@ -72,7 +79,12 @@ npm run dev        # http://localhost:3000
 npm run build      # must pass before a PR
 npm test           # node:test, no extra dependencies — needs Node 22+
 npm run typecheck
+npm run bench      # self-play tournament; LINEUP=a,b,c,d overrides the seats
 ```
+
+CI runs typecheck, tests and build on every pull request (`.github/workflows/ci.yml`). The bench is
+not part of CI — it takes minutes, and the strength assertion in `test/ai.test.ts` is the cheap
+version of the same check.
 
 Tests run TypeScript directly through Node's built-in type stripping, so `lib/` and `test/` must stay
 **erasable** TypeScript: no `enum`, no constructor parameter properties, and type-only imports must
