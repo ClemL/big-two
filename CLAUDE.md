@@ -15,8 +15,8 @@ These apply to every request in this repo.
   and a typecheck — run `npm test` and `npm run typecheck` too, and say so in the PR.
 * **Post the links at the end of every response** — the Vercel app, the Vercel pipeline and the git
   repo — so they can be opened quickly:
-  * App: https://big-two.vercel.app/
-  * Pipeline: https://vercel.com/clem21/big-two
+  * App: https://clem-big-two.vercel.app/
+  * Pipeline: https://vercel.com/clem21/clem-big-two
   * Repo: https://github.com/ClemL/big-two
 * Add a line to `public/updates.txt` when you ship a user-visible change. Entries are appended
   **oldest first**, one per line, in the form `<ISO 8601 timestamp> - <what changed>`. The footer

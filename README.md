@@ -19,6 +19,9 @@ built-in type stripping.
 
 ## Deploying to Vercel
 
+Live at <https://clem-big-two.vercel.app/>, built by the pipeline at
+<https://vercel.com/clem21/clem-big-two>.
+
 The project is a stock Next.js App Router app, so no configuration is needed:
 
 ```bash
