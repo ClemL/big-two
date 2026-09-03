@@ -23,7 +23,7 @@ export interface PlayerState {
 
 export interface LogEntry {
   player: number;
-  kind: "play" | "pass" | "win";
+  kind: "play" | "pass" | "clear" | "win";
   text: string;
 }
 
@@ -191,7 +191,11 @@ export function applyPass(state: GameState, player: number): GameState {
     next.table = null;
     next.passed = [false, false, false, false];
     next.turn = next.leader;
-    next.log.push({ player: next.leader, kind: "pass", text: `Table cleared — ${next.players[next.leader].name} leads` });
+    next.log.push({
+      player: next.leader,
+      kind: "clear",
+      text: `Table cleared — ${next.players[next.leader].name} leads`,
+    });
     return next;
   }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CardBack, CardView } from "@/components/CardView";
 import { Modal } from "@/components/Modal";
 import { RulesPanel } from "@/components/RulesPanel";
@@ -9,6 +9,7 @@ import { sortHand } from "@/lib/cards";
 import { comboName } from "@/lib/combos";
 import type { AiStyle } from "@/lib/ai";
 import { AI_STYLE_LABEL, chooseMove, suggestMove } from "@/lib/ai";
+import * as sound from "@/lib/sound";
 import {
   applyPass,
   applyPlay,
@@ -35,11 +36,42 @@ export default function GameTable() {
   const [message, setMessage] = useState<string>("");
   const [aiStyle, setAiStyle] = useState<AiStyle>("weakest");
   const [sortMode, setSortMode] = useState<SortMode>("rank");
+  const [muted, setMuted] = useState(false);
+  const seenLogEntries = useRef(0);
+  const dealtRound = useRef(-1);
 
   // Deal on the client so the server render stays deterministic and hydration-safe.
   useEffect(() => {
     setState(startRound({}));
+    setMuted(sound.loadMutePreference());
   }, []);
+
+  // Browsers only allow audio to start from a user gesture.
+  useEffect(() => {
+    const onGesture = () => sound.unlock();
+    window.addEventListener("pointerdown", onGesture);
+    window.addEventListener("keydown", onGesture);
+    return () => {
+      window.removeEventListener("pointerdown", onGesture);
+      window.removeEventListener("keydown", onGesture);
+    };
+  }, []);
+
+  // One place to turn game events into sound: every transition lands in the log.
+  useEffect(() => {
+    if (!state) return;
+    if (state.roundNumber !== dealtRound.current) {
+      dealtRound.current = state.roundNumber;
+      seenLogEntries.current = 0;
+      sound.play("deal");
+    }
+    const fresh = state.log.slice(seenLogEntries.current);
+    seenLogEntries.current = state.log.length;
+    for (const entry of fresh) {
+      if (entry.kind === "win") sound.play(entry.player === HUMAN ? "win" : "lose");
+      else sound.play(entry.kind);
+    }
+  }, [state]);
 
   // Drive the opponents one move at a time.
   useEffect(() => {
@@ -72,12 +104,21 @@ export default function GameTable() {
     (card: Card) => {
       if (!myTurn) return;
       setMessage("");
-      setSelected((prev) =>
-        prev.includes(card.id) ? prev.filter((id) => id !== card.id) : [...prev, card.id],
-      );
+      setSelected((prev) => {
+        const isSelected = prev.includes(card.id);
+        sound.play(isSelected ? "deselect" : "select");
+        return isSelected ? prev.filter((id) => id !== card.id) : [...prev, card.id];
+      });
     },
     [myTurn],
   );
+
+  const toggleMute = useCallback(() => {
+    const next = !muted;
+    sound.setMuted(next);
+    setMuted(next);
+    if (!next) sound.unlock();
+  }, [muted]);
 
   const play = useCallback(() => {
     if (!state || !myTurn) return;
@@ -168,6 +209,16 @@ export default function GameTable() {
           >
             New match
           </button>
+          <button
+            type="button"
+            className="btn btn--icon"
+            onClick={toggleMute}
+            aria-pressed={muted}
+            aria-label={muted ? "Unmute sound effects" : "Mute sound effects"}
+            title={muted ? "Sound off" : "Sound on"}
+          >
+            {muted ? "🔇" : "🔊"}
+          </button>
           <RulesPanel />
         </div>
       </header>
@@ -218,9 +269,10 @@ export default function GameTable() {
               <div className="pile__label">
                 {state.players[table.player].name} · {comboName(table.combo)}
               </div>
-              <div className="pile__cards">
-                {table.combo.cards.map((c) => (
-                  <CardView key={c.id} card={c} size="md" />
+              {/* Keyed on the play so a new one remounts and replays the animation. */}
+              <div className="pile__cards" key={table.combo.cards.map((c) => c.id).join("-")}>
+                {table.combo.cards.map((c, i) => (
+                  <CardView key={c.id} card={c} index={i} from={table.player} />
                 ))}
               </div>
             </>
@@ -241,11 +293,12 @@ export default function GameTable() {
         ) : null}
       </section>
 
-      <section className="hand" aria-label="Your hand">
-        {humanHand.map((card) => (
+      <section className="hand" aria-label="Your hand" key={`${state.roundNumber}-${state.seed}`}>
+        {humanHand.map((card, i) => (
           <CardView
             key={card.id}
             card={card}
+            index={i}
             selected={selected.includes(card.id)}
             disabled={!myTurn}
             onClick={toggleCard}

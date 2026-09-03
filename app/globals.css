@@ -264,12 +264,19 @@ body {
 }
 
 .card-back {
-  width: 40px;
-  height: 58px;
-  border-radius: 6px;
-  border: 1px solid rgba(0, 0, 0, 0.4);
-  background: repeating-linear-gradient(45deg, #1f4f8f 0 5px, #17406f 5px 10px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+  width: 41px;
+  height: 57px;
+  flex: none;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.4));
+  animation: back-deal 0.3s ease-out backwards;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+@keyframes back-deal {
+  from {
+    opacity: 0;
+    transform: translateY(-24px) scale(0.9);
+  }
 }
 
 .card-back + .card-back {
@@ -325,71 +332,94 @@ body {
 .card {
   position: relative;
   width: 58px;
-  height: 82px;
-  background: var(--card-face);
-  border: 1px solid rgba(0, 0, 0, 0.35);
+  height: 81px;
+  padding: 0;
+  border: none;
+  background: none;
   border-radius: 8px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  align-items: flex-start;
-  padding: 5px 6px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.4));
+  flex: none;
+}
+
+.card__svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+}
+
+.card__index {
   font-family: "Segoe UI", system-ui, sans-serif;
-}
-
-.card--sm {
-  width: 44px;
-  height: 62px;
-}
-
-.card--red {
-  color: var(--card-red);
-}
-
-.card--black {
-  color: var(--card-black);
-}
-
-.card__corner {
-  display: flex;
-  flex-direction: column;
-  line-height: 1;
-}
-
-.card__rank {
-  font-size: 17px;
+  font-size: 21px;
   font-weight: 700;
 }
 
-.card__suit {
-  font-size: 14px;
+/* Court emblems inherit the suit colour from the parent group's fill. */
+.court-emblem {
+  opacity: 0.9;
 }
 
-.card__pip {
-  align-self: flex-end;
-  font-size: 24px;
-  line-height: 1;
-  opacity: 0.85;
+.court-fleck {
+  opacity: 0.5;
+}
+
+.court-rule {
+  stroke: currentColor;
+  stroke-width: 0.8;
+  opacity: 0.35;
 }
 
 .card.is-clickable {
   cursor: pointer;
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  transition: transform 0.14s ease, filter 0.14s ease;
 }
 
 .card.is-clickable:hover:not(:disabled) {
-  transform: translateY(-6px);
+  transform: translateY(-8px);
+  filter: drop-shadow(0 8px 12px rgba(0, 0, 0, 0.5));
 }
 
-.card.is-selected {
-  transform: translateY(-16px);
-  box-shadow: 0 0 0 3px var(--accent), 0 6px 12px rgba(0, 0, 0, 0.45);
+.card.is-selected,
+.card.is-selected:hover:not(:disabled) {
+  transform: translateY(-18px);
+  filter: drop-shadow(0 0 0 var(--accent)) drop-shadow(0 10px 14px rgba(0, 0, 0, 0.5));
+}
+
+.card.is-selected .card__svg {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .card:disabled {
   cursor: default;
-  opacity: 0.75;
+  opacity: 0.94;
+}
+
+/* Dealt into the hand, staggered by position. */
+.hand .card {
+  animation: card-deal 0.34s cubic-bezier(0.22, 0.9, 0.3, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 38ms);
+}
+
+@keyframes card-deal {
+  from {
+    opacity: 0;
+    transform: translate(-40px, 90px) rotate(-14deg) scale(0.8);
+  }
+}
+
+/* Thrown into the middle from the seat that played it. */
+.pile__cards .card {
+  transform: rotate(var(--tilt, 0deg));
+  animation: card-throw 0.36s cubic-bezier(0.2, 0.85, 0.3, 1) backwards;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+@keyframes card-throw {
+  from {
+    opacity: 0;
+    transform: translate(var(--from-x, 0), var(--from-y, -160px)) rotate(-18deg) scale(0.86);
+  }
 }
 
 /* ---------- status, hand, actions ---------- */
@@ -635,15 +665,7 @@ body {
 
   .card {
     width: 46px;
-    height: 66px;
-  }
-
-  .card__rank {
-    font-size: 14px;
-  }
-
-  .card__pip {
-    font-size: 18px;
+    height: 64px;
   }
 
   .card-back {
@@ -653,5 +675,90 @@ body {
 
   .card-back + .card-back {
     margin-left: -20px;
+  }
+}
+
+/* ---------- motion ---------- */
+
+.btn--icon {
+  padding: 8px 10px;
+  line-height: 1;
+  font-size: 15px;
+}
+
+.seat.is-turn,
+.scoreboard__row.is-active {
+  animation: turn-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes turn-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(224, 182, 66, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(224, 182, 66, 0.16);
+  }
+}
+
+.seat__badge {
+  animation: badge-pop 0.28s cubic-bezier(0.2, 1.4, 0.4, 1) backwards;
+}
+
+@keyframes badge-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+.pile__label {
+  animation: fade-in 0.3s ease-out backwards;
+}
+
+.pile__empty {
+  animation: fade-in 0.35s ease-out backwards;
+}
+
+.log__line {
+  animation: log-slide 0.25s ease-out backwards;
+}
+
+@keyframes log-slide {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.modal-overlay {
+  animation: fade-in 0.2s ease-out;
+}
+
+.modal {
+  animation: modal-in 0.28s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.96);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
   }
 }

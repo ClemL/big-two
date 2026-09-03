@@ -73,12 +73,14 @@ Two selectable styles, switchable mid-match from the header:
 
 ```
 app/            Next.js App Router entry, global stylesheet, icon
-components/     GameTable (all interaction), CardView, RulesPanel, Modal, BuildFooter
+components/     GameTable (all interaction), CardView, CardFace (SVG deck), RulesPanel,
+                Modal, BuildFooter
 lib/cards.ts    Deck, rank/suit ordering, seeded shuffle and deal
 lib/combos.ts   Combination detection, comparison, legal move generation
 lib/engine.ts   Round state machine: play, pass, trick clearing, round end
 lib/scoring.ts  Hong Kong penalty multipliers
 lib/ai.ts       Opponent policies
+lib/sound.ts    Web Audio sound effects
 public/         updates.txt (changelog)
 test/           node:test unit tests, including 300 simulated self-play rounds
 ```
@@ -103,6 +105,19 @@ Lines are displayed verbatim, blank lines are ignored, and a missing or unreadab
 part of the footer empty rather than raising an error. Add a line whenever you ship a user-visible
 change. Version and build stamp are inlined at build time by `next.config.mjs`; on Vercel the commit
 SHA comes from `VERCEL_GIT_COMMIT_SHA`.
+
+## Presentation
+
+* **Cards are SVG**, drawn from suit paths and pip layouts in `components/CardFace.tsx` — no image
+  assets, crisp at any size, and the standard French-deck arrangement including rotated bottom-half
+  pips and mirrored corner indices.
+* **Motion** is CSS-only: hands deal in staggered, played cards fly in from the seat that threw them,
+  the active seat pulses, dialogs fade and lift. Everything collapses under
+  `prefers-reduced-motion: reduce`.
+* **Sound** is synthesized at runtime with the Web Audio API (`lib/sound.ts`) — noise bursts for card
+  flicks, short tones for selection, passing and the end-of-round fanfares. Nothing is downloaded.
+  Browsers require a user gesture before audio starts, so the context is created on first
+  interaction. The speaker button mutes, and the preference is stored in `localStorage`.
 
 ## Controls
 

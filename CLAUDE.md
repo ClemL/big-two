@@ -31,12 +31,14 @@ client side, so a Vercel deployment is just `next build` plus static hosting.
 
 ```
 app/            App Router entry, global stylesheet, icon
-components/     GameTable (all interaction), CardView, RulesPanel, Modal, BuildFooter
+components/     GameTable (all interaction), CardView, CardFace (SVG deck), RulesPanel,
+                Modal, BuildFooter
 lib/cards.ts    Deck, rank/suit ordering, seeded shuffle and deal
 lib/combos.ts   Combination detection, comparison, legal move generation
 lib/engine.ts   Round state machine: play, pass, trick clearing, round end
 lib/scoring.ts  Hong Kong penalty multipliers
 lib/ai.ts       Opponent policies
+lib/sound.ts    Web Audio sound effects
 public/         updates.txt (changelog)
 test/           node:test unit tests, including simulated self-play rounds
 ```
@@ -92,3 +94,14 @@ almost nowhere else.
   bubble up to the same handler, and closing on those feels broken. The guard is in `Modal.tsx`.
 * The build footer reads `public/updates.txt` at runtime and fails silently if it is missing.
   Version and build stamp are inlined at build time by `next.config.mjs`.
+* Cards are SVG drawn by `CardFace.tsx` on a 100x140 grid — no image assets. Suit shapes are authored
+  in a 0..100 box and scaled at the point of use, so a new pip position is a coordinate, not a new
+  asset. Court emblems inherit the suit colour from the parent group, which is why that group sets
+  both `fill` and `color`.
+* Animation is CSS-only and lives in `globals.css`. Replaying an animation means changing a React
+  `key` (the pile is keyed on the played cards, the hand on the round), not toggling a class. Every
+  animation must stay behind the `prefers-reduced-motion` block at the end of the stylesheet.
+* Sound is synthesized in `lib/sound.ts`; do not add audio files. Browsers block audio until a user
+  gesture, so `unlock()` runs on the first pointer or key event and `play()` is a no-op before that.
+  Game events are turned into sound in one place — the effect in `GameTable` that walks new
+  `state.log` entries — so a new game event only needs a log entry and a recipe.
