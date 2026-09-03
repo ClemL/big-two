@@ -103,7 +103,7 @@ function playOut(seed: number, style: AiStyle): GameState {
   return state;
 }
 
-for (const style of ["weakest", "random"] as AiStyle[]) {
+for (const style of ["weakest", "random", "strategist"] as AiStyle[]) {
   test(`self-play terminates and conserves cards (${style})`, () => {
     for (let seed = 1; seed <= 150; seed++) {
       const end = playOut(seed, style);

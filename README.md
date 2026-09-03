@@ -12,6 +12,7 @@ npm run dev      # http://localhost:3000
 npm run build    # production build
 npm test         # engine + AI unit tests (node:test, no extra dependencies)
 npm run typecheck
+npm run bench    # self-play tournament between the opponent styles
 ```
 
 Node 22 or newer is required — the tests run TypeScript directly through Node's
@@ -57,17 +58,57 @@ want the alternative.
 
 ## Opponents
 
-The three AI players share one hard constraint: **they never pass while they hold
-a legal play**. They only pass when the table leaves them with nothing playable.
-Two selectable styles, switchable mid-match from the header:
+All three styles share one rule: **they never pass while they hold a legal
+play**. Selectable mid-match from the header.
 
-- **Lowest legal play** (default) — plays the lowest-quality legal combination
-  available: smallest shape first, then the lowest category, then the lowest
-  value. In practice they dribble out low singles and hold their big cards.
-- **Random legal play** — picks uniformly at random among every legal play.
+| Style | Behavior |
+| --- | --- |
+| Lowest legal play (default) | Plays the lowest-quality legal combination available: smallest shape, lowest category, lowest value. Dribbles low singles and hoards big cards. |
+| Random legal play | Picks uniformly at random among every legal play. |
+| Competitive | Plans the hand into the fewest possible plays and protects that plan. |
 
-`lib/ai.ts` is roughly twenty lines; both styles are selections over the same
-`legalMovesFor` list, which is returned in ascending strength order.
+The competitive tier works from an exact hand decomposition (`lib/strategy.ts`).
+"How many turns do I still need?" is an exact-cover problem over the
+combinations a hand contains, and at 13 cards it is small enough to solve
+exactly with a bitmask DP rather than a greedy pass:
+
+```
+best[mask] = 1 + min over combos c ⊆ mask of best[mask \ c]
+```
+
+Pinning each step to the lowest remaining card removes duplicate permutations
+of the same partition, which keeps a full 13-card plan at roughly 4 ms.
+
+On top of that plan the policy is:
+
+* a move that empties the hand is played immediately;
+* a move is **efficient** when it consumes exactly one group of the optimal
+  partition — the hand needs one fewer play afterwards;
+* leading, it plays the largest efficient group, except against an opponent
+  down to one card, where it leads a shape they cannot legally answer;
+* following, it plays the cheapest efficient move, and when nothing is
+  efficient, the move that damages the plan least.
+
+### Measured strength
+
+`npm run bench` runs a self-play tournament with the seat assignment rotating by
+seed so the 3♦ lead averages out. Against two lowest-legal opponents and one
+random opponent over 400 rounds:
+
+| Style | Win rate | Chips per round |
+| --- | --- | --- |
+| Competitive | 48.3% | +8.20 |
+| Lowest legal play | 22.8% | −3.59 |
+| Random legal play | 6.3% | −4.60 |
+
+The baseline for four players is 25%.
+
+Strategic passing — declining to break up a group when nothing efficient is
+available — was implemented and measured rather than assumed. Over 1000 rounds
+head to head it wins more rounds (26.6% against 23.4%) but loses on chips
+(−0.70 a round against +0.70): the hands it holds on to get caught by the
+penalty multipliers. Hong Kong scoring counts chips, so the shipped policy
+contests instead.
 
 ## Project layout
 
@@ -80,9 +121,11 @@ lib/combos.ts   Combination detection, comparison, legal move generation
 lib/engine.ts   Round state machine: play, pass, trick clearing, round end
 lib/scoring.ts  Hong Kong penalty multipliers
 lib/ai.ts       Opponent policies
+lib/strategy.ts Exact minimum-plays hand decomposition
 lib/sound.ts    Web Audio sound effects
 public/         updates.txt (changelog)
-test/           node:test unit tests, including 300 simulated self-play rounds
+bench/          Self-play tournament (npm run bench)
+test/           node:test unit tests, including 450 simulated self-play rounds
 ```
 
 The game engine is pure: `startRound`, `applyPlay` and `applyPass` return new
