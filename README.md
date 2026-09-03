@@ -70,12 +70,13 @@ Two selectable styles, switchable mid-match from the header:
 
 ```
 app/            Next.js App Router entry, global stylesheet, icon
-components/     GameTable (all interaction), CardView, RulesPanel
+components/     GameTable (all interaction), CardView, RulesPanel, Modal, BuildFooter
 lib/cards.ts    Deck, rank/suit ordering, seeded shuffle and deal
 lib/combos.ts   Combination detection, comparison, legal move generation
 lib/engine.ts   Round state machine: play, pass, trick clearing, round end
 lib/scoring.ts  Hong Kong penalty multipliers
 lib/ai.ts       Opponent policies
+public/         updates.txt (changelog)
 test/           node:test unit tests, including 300 simulated self-play rounds
 ```
 
@@ -83,6 +84,22 @@ The game engine is pure: `startRound`, `applyPlay` and `applyPass` return new
 state objects and never mutate their input, and dealing runs off a seeded PRNG
 (`mulberry32`) so any round can be replayed by seed. The React layer holds one
 `GameState` and re-renders from it.
+
+## Changelog footer
+
+The footer carries the version, build stamp and short commit SHA, followed by the most recent
+changelog entry. Clicking that entry opens a dialog with the full history, newest first. Entries live
+in `public/updates.txt`, one per line, appended **oldest first**:
+
+```
+2026-09-03T18:10:00Z - Initial release: ...
+2026-09-03T19:05:00Z - Added a build footer with the changelog: ...
+```
+
+Lines are displayed verbatim, blank lines are ignored, and a missing or unreadable file leaves that
+part of the footer empty rather than raising an error. Add a line whenever you ship a user-visible
+change. Version and build stamp are inlined at build time by `next.config.mjs`; on Vercel the commit
+SHA comes from `VERCEL_GIT_COMMIT_SHA`.
 
 ## Controls
 

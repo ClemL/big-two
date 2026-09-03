@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CardBack, CardView } from "@/components/CardView";
+import { Modal } from "@/components/Modal";
 import { RulesPanel } from "@/components/RulesPanel";
 import type { Card, SortMode } from "@/lib/cards";
 import { sortHand } from "@/lib/cards";
@@ -291,9 +292,8 @@ export default function GameTable() {
       </section>
 
       {state.finished && state.lastDeltas ? (
-        <div className="overlay">
-          <div className="overlay__card">
-            <h2>{state.players[state.winner!].name} won round {state.roundNumber}</h2>
+        <Modal title={`${state.players[state.winner!].name} won round ${state.roundNumber}`}>
+          <>
             <table className="results">
               <thead>
                 <tr>
@@ -329,8 +329,8 @@ export default function GameTable() {
             >
               Next round
             </button>
-          </div>
-        </div>
+          </>
+        </Modal>
       ) : null}
     </main>
   );
