@@ -44,7 +44,8 @@ lib/ai.ts       Opponent policies
 lib/strategy.ts Exact minimum-plays hand decomposition
 lib/sound.ts    Web Audio sound effects
 lib/room.ts     Multiplayer room model: seats, intents, redaction
-lib/server/     Room storage (Upstash REST + memory), crypto, request helpers
+lib/server/     api (every endpoint), room storage (Upstash REST + memory),
+                crypto, rate limiting, HTTP helpers
 public/         updates.txt (changelog)
 bench/          Self-play tournament between styles (npm run bench)
 test/           node:test unit tests, including simulated self-play rounds
@@ -87,6 +88,12 @@ update `test/` and the in-app rules panel in the same commit.
 * **A seat is identified by its token, not by the room password.** The password admits you to the
   room; the per-seat token says which seat you are. Collapsing the two lets anyone with the password
   move as anyone.
+* **Endpoints live in `lib/server/api.ts`, not in `app/api/**`.** Route files are two-line adapters
+  onto plain `Request` -> `Response` functions. That is what makes the HTTP layer testable without a
+  server, so keep new endpoints there and keep the adapters empty of logic.
+* **The password endpoints are rate limited.** PBKDF2 means every guess costs server time, so an
+  unthrottled endpoint is both a guessing oracle and a bill. Limits are per caller *and* per room —
+  dropping the room-wide one lets an attacker rotate IPs.
 * **Room writes are compare-and-set on the version.** Requests interleave across serverless
   instances, so an unconditional write silently drops concurrent moves.
 
@@ -107,7 +114,8 @@ version of the same check.
 
 Tests run TypeScript directly through Node's built-in type stripping, so `lib/` and `test/` must stay
 **erasable** TypeScript: no `enum`, no constructor parameter properties, and type-only imports must
-use `import type`. Files under `lib/` import each other with explicit `.ts` extensions for the same
+use `import type`. This only bites when a test imports the file — `lib/server/store.ts` carried a
+constructor parameter property for two PRs before the HTTP tests reached it. Files under `lib/` import each other with explicit `.ts` extensions for the same
 reason; components import through the `@/` alias.
 
 The self-play tests simulate a few hundred full rounds and take roughly half a minute. That is the
@@ -139,6 +147,8 @@ almost nowhere else.
 * Animation is CSS-only and lives in `globals.css`. Replaying an animation means changing a React
   `key` (the pile is keyed on the played cards, the hand on the round), not toggling a class. Every
   animation must stay behind the `prefers-reduced-motion` block at the end of the stylesheet.
+* Shared client behaviour lives in `components/hooks.ts` — turn signals, keyboard shortcuts, the
+  auto-pass timer. Both tables use them, so a change lands in both.
 * Sound is synthesized in `lib/sound.ts`; do not add audio files. Browsers block audio until a user
   gesture, so `unlock()` runs on the first pointer or key event and `play()` is a no-op before that.
   Game events are turned into sound in one place — the effect in `GameTable` that walks new

@@ -13,3 +13,10 @@
 2026-09-04T01:30:00Z - Table display: point a tablet at /room/<code>/table to use it as the table itself — hand to beat, last three plays, every score and card count, and which seat number sits where.
 2026-09-04T01:30:00Z - The table runs the match: deal the next round, restart the match, or adjust a seat's score by hand.
 2026-09-04T01:30:00Z - While a table display is running, phones show only your own hand and buttons.
+2026-09-04T03:00:00Z - Password attempts and room creation are now rate limited, per caller and per room.
+2026-09-04T03:00:00Z - The three plays before the current one now sit to the left of the pile and slide across as new ones land.
+2026-09-04T03:00:00Z - When your hand holds no legal reply the game passes for you instead of making you tap.
+2026-09-04T03:00:00Z - Keyboard play: arrows walk your hand, Space selects, Enter plays, P passes, H hints, Esc clears.
+2026-09-04T03:00:00Z - Your turn now chimes and vibrates on a phone, and the table display calls out the seat to play.
+2026-09-04T03:00:00Z - Added a web manifest and link preview image, so the table display can be saved to a tablet home screen.
+2026-09-04T03:00:00Z - A crash now offers a way back instead of a blank screen.

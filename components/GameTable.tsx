@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal } from "@/components/Modal";
 import { RulesPanel } from "@/components/RulesPanel";
-import { RoundSummary, TableView, type OpponentSeat } from "@/components/TableView";
+import { RoundSummary, TableView, type OpponentSeat, type PreviousPlay } from "@/components/TableView";
+import { useAutoPass, useGameKeys } from "@/components/hooks";
 import type { Card, SortMode } from "@/lib/cards";
 import { sortHand } from "@/lib/cards";
 import { comboName } from "@/lib/combos";
@@ -154,6 +155,16 @@ export default function GameTable() {
     setMessage(`Suggestion: ${comboName(move)}`);
   }, [state, myTurn]);
 
+  // No legal reply means no decision to make, so the pass is automatic.
+  useAutoPass(!!state && myTurn && myMoves.length === 0 && !!state.table, pass);
+  useGameKeys({
+    enabled: myTurn,
+    onPlay: play,
+    onPass: pass,
+    onHint: hint,
+    onClear: () => setSelected([]),
+  });
+
   if (!state) {
     return (
       <main className="app">
@@ -167,7 +178,7 @@ export default function GameTable() {
     ? `${state.players[state.winner!].name} won round ${state.roundNumber}`
     : myTurn
       ? myMoves.length === 0
-        ? "You have no legal play — pass."
+        ? "No legal play — passing for you."
         : table
           ? `Your turn — beat the ${comboName(table.combo).toLowerCase()}`
           : state.openingPlay
@@ -251,6 +262,11 @@ export default function GameTable() {
             }
           : null
       }
+      previousPlays={state.history.slice(0, -1).slice(-3).map((play) => ({
+        key: `${play.player}-${play.combo.cards.map((c) => c.id).join("")}`,
+        combo: play.combo,
+        playerName: state.players[play.player].name,
+      }))}
       clearTableLeader={state.players[state.leader].name}
       status={status}
       message={message || (selectedCards.length > 0 ? selectionProblem : null)}

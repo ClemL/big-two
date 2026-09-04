@@ -5,6 +5,7 @@ import { Modal } from "@/components/Modal";
 import { RulesPanel } from "@/components/RulesPanel";
 import { PocketView } from "@/components/PocketView";
 import { RoundSummary, TableView, type OpponentSeat } from "@/components/TableView";
+import { useAutoPass, useGameKeys, useTurnSignal } from "@/components/hooks";
 import type { Card, SortMode } from "@/lib/cards";
 import { sortHand } from "@/lib/cards";
 import { comboName, identify, legalMoves } from "@/lib/combos";
@@ -196,6 +197,19 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
     if (!next) sound.unlock();
   }, [muted]);
 
+  // A phone spends the game face down when a tablet is the table.
+  useTurnSignal(myTurn, seat !== null);
+  useAutoPass(myTurn && !busy && myMoves.length === 0 && room.table !== null, () => {
+    void send({ action: "pass" });
+  });
+  useGameKeys({
+    enabled: myTurn && !busy,
+    onPlay: play,
+    onPass: () => void send({ action: "pass" }),
+    onHint: hint,
+    onClear: () => setSelected([]),
+  });
+
   const me = seat ?? 0;
   const seatName = (index: number) => room.seats[index].name;
 
@@ -203,7 +217,7 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
     ? `${seatName(room.winner!)} won round ${room.roundNumber}`
     : myTurn
       ? myMoves.length === 0
-        ? "You have no legal play — pass."
+        ? "No legal play — passing for you."
         : room.table
           ? `Your turn — beat the ${comboName(room.table.combo).toLowerCase()}`
           : room.openingPlay
@@ -353,6 +367,11 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
             }
           : null
       }
+      previousPlays={room.history.slice(0, -1).slice(-3).map((play) => ({
+        key: `${play.player}-${play.combo.cards.map((c) => c.id).join("")}`,
+        combo: play.combo,
+        playerName: seatName(play.player),
+      }))}
       clearTableLeader={seatName(room.leader)}
       status={status}
       message={message}

@@ -21,6 +21,8 @@ export interface RoomStore {
   create(room: Room): Promise<boolean>;
   /** Writes only if the stored version still equals `expectedVersion`. */
   save(room: Room, expectedVersion: number): Promise<SaveResult>;
+  /** Counter for rate limiting: increments and returns the value in-window. */
+  increment(key: string, windowSeconds: number): Promise<number>;
 }
 
 /** Rooms are disposable; a week of inactivity is plenty for a game night. */
@@ -33,6 +35,13 @@ const versionKey = (id: string) => `bigtwo:room:${id}:v`;
  * Version lives in its own key so the check-and-set needs no JSON parsing
  * inside Redis: compare a string, then write both keys atomically.
  */
+/* First write in a window starts its clock; later ones just count. */
+const COUNTER_SCRIPT = `
+local n = redis.call('INCR', KEYS[1])
+if n == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end
+return n
+`;
+
 const CAS_SCRIPT = `
 if redis.call('GET', KEYS[2]) ~= ARGV[2] then return 0 end
 redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[4])
@@ -43,10 +52,15 @@ return 1
 class UpstashStore implements RoomStore {
   readonly kind = "upstash" as const;
 
-  constructor(
-    private readonly url: string,
-    private readonly token: string,
-  ) {}
+  // Explicit fields, not constructor parameter properties: `lib/` has to stay
+  // erasable TypeScript so the tests can run it through Node's type stripping.
+  private readonly url: string;
+  private readonly token: string;
+
+  constructor(url: string, token: string) {
+    this.url = url;
+    this.token = token;
+  }
 
   private async command<T>(parts: (string | number)[]): Promise<T> {
     const response = await fetch(this.url, {
@@ -85,6 +99,10 @@ class UpstashStore implements RoomStore {
     return true;
   }
 
+  async increment(key: string, windowSeconds: number): Promise<number> {
+    return this.command<number>(["EVAL", COUNTER_SCRIPT, 1, key, String(windowSeconds)]);
+  }
+
   async save(room: Room, expectedVersion: number): Promise<SaveResult> {
     const applied = await this.command<number>([
       "EVAL",
@@ -108,6 +126,18 @@ class UpstashStore implements RoomStore {
 class MemoryStore implements RoomStore {
   readonly kind = "memory" as const;
   private readonly rooms = new Map<string, string>();
+  private readonly counters = new Map<string, { count: number; expiresAt: number }>();
+
+  async increment(key: string, windowSeconds: number): Promise<number> {
+    const now = Date.now();
+    const existing = this.counters.get(key);
+    if (!existing || existing.expiresAt <= now) {
+      this.counters.set(key, { count: 1, expiresAt: now + windowSeconds * 1000 });
+      return 1;
+    }
+    existing.count += 1;
+    return existing.count;
+  }
 
   async load(id: string): Promise<Room | null> {
     const raw = this.rooms.get(id);
