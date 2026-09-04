@@ -4,10 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal } from "@/components/Modal";
 import { RulesPanel } from "@/components/RulesPanel";
 import { RoundSummary, TableView, type OpponentSeat, type PreviousPlay } from "@/components/TableView";
-import { useAutoPass, useGameKeys } from "@/components/hooks";
+import { useAutoHint, useAutoPass, useDoubleTap, useGameKeys } from "@/components/hooks";
 import type { Card, SortMode } from "@/lib/cards";
 import { sortHand } from "@/lib/cards";
-import { comboName } from "@/lib/combos";
+import { comboName, identify } from "@/lib/combos";
 import type { AiStyle } from "@/lib/ai";
 import { AI_STYLE_LABEL, chooseMove, suggestMove } from "@/lib/ai";
 import * as sound from "@/lib/sound";
@@ -17,6 +17,7 @@ import {
   canPass,
   legalMovesFor,
   nextRound,
+  previousPlays,
   startRound,
   validatePlay,
   type GameState,
@@ -96,17 +97,26 @@ export default function GameTable() {
   const selectionProblem =
     state && selectedCards.length > 0 ? validatePlay(state, HUMAN, selectedCards) : null;
 
+  const registerTap = useDoubleTap();
+
   const toggleCard = useCallback(
     (card: Card) => {
-      if (!myTurn) return;
+      if (!state || !myTurn) return;
       setMessage("");
+      // Tapping the same card twice plays it, when that single is legal on its
+      // own. A slower second tap still just deselects, as it always did.
+      if (registerTap(card.id) && validatePlay(state, HUMAN, [card]) === null) {
+        setState(applyPlay(state, HUMAN, [card]));
+        setSelected([]);
+        return;
+      }
       setSelected((prev) => {
         const isSelected = prev.includes(card.id);
         sound.play(isSelected ? "deselect" : "select");
         return isSelected ? prev.filter((id) => id !== card.id) : [...prev, card.id];
       });
     },
-    [myTurn],
+    [state, myTurn, registerTap],
   );
 
   const toggleMute = useCallback(() => {
@@ -154,6 +164,16 @@ export default function GameTable() {
     setSelected(move.cards.map((c) => c.id));
     setMessage(`Suggestion: ${comboName(move)}`);
   }, [state, myTurn]);
+
+  // Cards that cannot take part in any legal play, so the choice narrows to
+  // what is actually available.
+  const dimmed = useMemo(() => {
+    if (!myTurn || myMoves.length === 0) return [];
+    const playable = new Set(myMoves.flatMap((move) => move.cards.map((c) => c.id)));
+    return humanHand.filter((card) => !playable.has(card.id)).map((card) => card.id);
+  }, [myTurn, myMoves, humanHand]);
+
+  useAutoHint(myTurn, hint);
 
   // No legal reply means no decision to make, so the pass is automatic.
   useAutoPass(!!state && myTurn && myMoves.length === 0 && !!state.table, pass);
@@ -262,10 +282,11 @@ export default function GameTable() {
             }
           : null
       }
-      previousPlays={state.history.slice(0, -1).slice(-3).map((play) => ({
-        key: `${play.player}-${play.combo.cards.map((c) => c.id).join("")}`,
+      previousPlays={previousPlays(state.history, state.table).map((play) => ({
+        key: `${play.trick}-${play.player}-${play.combo.cards.map((c) => c.id).join("")}`,
         combo: play.combo,
         playerName: state.players[play.player].name,
+        spent: play.trick < state.trick,
       }))}
       clearTableLeader={state.players[state.leader].name}
       status={status}
@@ -273,6 +294,7 @@ export default function GameTable() {
       hand={humanHand}
       handKey={`${state.roundNumber}-${state.seed}`}
       selected={selected}
+      dimmed={dimmed}
       canSelect={myTurn}
       onToggleCard={toggleCard}
       actions={

@@ -332,11 +332,42 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 4px;
-  opacity: 0.55;
+  opacity: 0.6;
+  animation: history-enter 0.34s cubic-bezier(0.2, 0.8, 0.3, 1);
 }
 
 .pile__history-entry:last-child {
-  opacity: 0.85;
+  opacity: 0.9;
+}
+
+/* Plays from a trick that has already been swept sit further back. */
+.pile__history-entry.is-spent {
+  opacity: 0.32;
+  filter: saturate(0.55);
+}
+
+.pile__history-entry.is-leaving {
+  animation: history-vanish 0.38s ease-in forwards;
+  pointer-events: none;
+  /* Collapsing to zero width has to clip, or the label rides over its neighbour. */
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+@keyframes history-enter {
+  from {
+    opacity: 0;
+    transform: translateX(26px) scale(0.9);
+  }
+}
+
+@keyframes history-vanish {
+  to {
+    opacity: 0;
+    transform: translateX(-18px) scale(0.78);
+    max-width: 0;
+    margin-left: -12px;
+  }
 }
 
 .pile__history-who {
@@ -457,6 +488,18 @@ body {
 .card:disabled {
   cursor: default;
   opacity: 0.94;
+}
+
+/* Cannot be part of any legal play from this position. */
+.card.is-dimmed {
+  filter: grayscale(0.85) brightness(0.62);
+  opacity: 0.72;
+  transition: filter 0.2s ease, opacity 0.2s ease;
+}
+
+.card.is-dimmed.is-selected {
+  filter: none;
+  opacity: 1;
 }
 
 /* Dealt into the hand, staggered by position. */
@@ -1319,4 +1362,53 @@ body {
     --card-w: 74px;
     --card-h: 103px;
   }
+}
+
+/* ---------- dealing flourish ---------- */
+
+.deal {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.deal__card {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 34px;
+  height: 48px;
+  margin: -24px 0 0 -17px;
+  border-radius: 5px;
+  background: repeating-linear-gradient(45deg, #1f4f8f 0 5px, #17406f 5px 10px);
+  border: 1px solid rgba(0, 0, 0, 0.45);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  animation: deal-out 0.5s cubic-bezier(0.3, 0.7, 0.4, 1) forwards;
+}
+
+.deal__card--0 { --deal-x: 0px; --deal-y: 210px; }
+.deal__card--1 { --deal-x: -320px; --deal-y: -40px; }
+.deal__card--2 { --deal-x: 0px; --deal-y: -130px; }
+.deal__card--3 { --deal-x: 320px; --deal-y: -40px; }
+
+@keyframes deal-out {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.7) rotate(0deg);
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--deal-x), var(--deal-y)) scale(0.95) rotate(24deg);
+  }
+}
+
+@media (max-width: 720px) {
+  .deal__card--1 { --deal-x: -120px; --deal-y: -20px; }
+  .deal__card--3 { --deal-x: 120px; --deal-y: -20px; }
+  .deal__card--0 { --deal-y: 150px; }
 }

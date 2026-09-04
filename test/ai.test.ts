@@ -122,7 +122,7 @@ test("a strategist that can go out does so immediately", () => {
   state = {
     ...state,
     turn: 1,
-    table: { player: 0, combo: identify(hand("4D", "4C"))! },
+    table: { player: 0, combo: identify(hand("4D", "4C"))!, trick: 0 },
     leader: 0,
     openingPlay: false,
     players: state.players.map((p) =>

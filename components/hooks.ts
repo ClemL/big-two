@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as sound from "@/lib/sound";
 
 /**
@@ -102,4 +102,67 @@ export function useAutoPass(shouldPass: boolean, pass: () => void, delayMs = 900
     const timer = setTimeout(pass, delayMs);
     return () => clearTimeout(timer);
   }, [shouldPass, pass, delayMs]);
+}
+
+
+/**
+ * Keep items in the render for a moment after they leave the list, so they can
+ * animate out. React unmounts immediately otherwise, and a trick that vanishes
+ * between frames is exactly the thing players complain they missed.
+ */
+export function useLingering<T>(
+  items: readonly T[],
+  keyOf: (item: T) => string,
+  ms = 380,
+): T[] {
+  const [leaving, setLeaving] = useState<T[]>([]);
+  const previous = useRef<T[]>([...items]);
+  const signature = items.map(keyOf).join("|");
+
+  useEffect(() => {
+    const currentKeys = new Set(items.map(keyOf));
+    const gone = previous.current.filter((item) => !currentKeys.has(keyOf(item)));
+    previous.current = [...items];
+    if (gone.length === 0) return;
+
+    setLeaving((old) => [...old, ...gone]);
+    const goneKeys = new Set(gone.map(keyOf));
+    const timer = setTimeout(
+      () => setLeaving((old) => old.filter((item) => !goneKeys.has(keyOf(item)))),
+      ms,
+    );
+    return () => clearTimeout(timer);
+    // Identity of `items` changes every render; its contents are what matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [signature, ms]);
+
+  return leaving;
+}
+
+/**
+ * Report whether this is a second tap on the same target inside the window.
+ *
+ * Used to play a single card by tapping it twice, without breaking the plain
+ * tap-to-select-and-deselect behaviour a slower second tap should still get.
+ */
+export function useDoubleTap(windowMs = 500): (id: string) => boolean {
+  const last = useRef<{ id: string; at: number } | null>(null);
+  return useMemo(
+    () => (id: string) => {
+      const now = Date.now();
+      const repeat = last.current !== null && last.current.id === id && now - last.current.at < windowMs;
+      last.current = repeat ? null : { id, at: now };
+      return repeat;
+    },
+    [windowMs],
+  );
+}
+
+/** Pre-select the suggested play as soon as the turn arrives. */
+export function useAutoHint(isMyTurn: boolean, hint: () => void, enabled = true): void {
+  const wasMyTurn = useRef(isMyTurn);
+  useEffect(() => {
+    if (enabled && isMyTurn && !wasMyTurn.current) hint();
+    wasMyTurn.current = isMyTurn;
+  }, [isMyTurn, hint, enabled]);
 }

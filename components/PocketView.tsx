@@ -24,6 +24,7 @@ export function PocketView({
   hand,
   handKey,
   selected,
+  dimmed = [],
   canSelect,
   onToggleCard,
   actions,
@@ -37,6 +38,7 @@ export function PocketView({
   hand: Card[];
   handKey: string;
   selected: string[];
+  dimmed?: string[];
   canSelect: boolean;
   onToggleCard: (card: Card) => void;
   actions: ReactNode;
@@ -71,6 +73,7 @@ export function PocketView({
             card={card}
             index={i}
             selected={selected.includes(card.id)}
+            dimmed={dimmed.includes(card.id)}
             disabled={!canSelect}
             onClick={onToggleCard}
           />

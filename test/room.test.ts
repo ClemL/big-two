@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mulberry32 } from "../lib/cards.ts";
-import { legalMovesFor } from "../lib/engine.ts";
+import { RANKS, SUITS, makeCard, mulberry32, type Card } from "../lib/cards.ts";
+import { identify } from "../lib/combos.ts";
+import { HISTORY_LIMIT, legalMovesFor, previousPlays } from "../lib/engine.ts";
 import {
   SEAT_IDLE_MS,
   TABLE_IDLE_MS,
@@ -24,6 +25,15 @@ import {
 } from "../lib/room.ts";
 
 const T0 = 1_700_000_000_000;
+
+function hand(...ids: string[]): Card[] {
+  return ids.map((id) =>
+    makeCard(
+      RANKS.indexOf(id.slice(0, -1) as (typeof RANKS)[number]),
+      SUITS.indexOf(id.slice(-1) as (typeof SUITS)[number]),
+    ),
+  );
+}
 
 function room(seed = 42): Room {
   return createRoom({ id: "TEST01", passwordHash: "hash", salt: "salt", seed, now: T0 });
@@ -315,9 +325,10 @@ test("the table display cannot skip an unfinished round", () => {
   assert.equal(early.ok, false);
 });
 
-test("plays accumulate in the history and clear with the table", () => {
+test("plays survive the trick being swept, so the table can still be read", () => {
   let r = seatEveryone(room(42));
   assert.deepEqual(r.state.history, []);
+  assert.equal(r.state.trick, 0);
   const seat = r.state.turn;
   const opening = legalMovesFor(r.state, seat)[0];
   const played = applyIntent(r, seat, { kind: "play", cardIds: opening.cards.map((c) => c.id) }, T0);
@@ -325,13 +336,53 @@ test("plays accumulate in the history and clear with the table", () => {
   r = played.room;
   assert.equal(r.state.history.length, 1);
   assert.equal(r.state.history[0].player, seat);
+  assert.equal(r.state.history[0].trick, 0);
 
-  // Three passes sweep the trick, and the display should stop showing it.
+  // Three passes sweep the trick. The pile goes; the record of it stays.
   for (let i = 0; i < 3; i++) {
     const result = applyIntent(r, r.state.turn, { kind: "pass" }, T0);
     assert.ok(result.ok);
     r = result.room;
   }
   assert.equal(r.state.table, null);
-  assert.deepEqual(r.state.history, []);
+  assert.equal(r.state.history.length, 1, "history outlives the trick");
+  assert.equal(r.state.trick, 1, "the trick counter moved on");
+
+  // The next play belongs to the new trick, so the display can tell them apart.
+  const next = applyIntent(
+    r,
+    r.state.turn,
+    { kind: "play", cardIds: legalMovesFor(r.state, r.state.turn)[0].cards.map((c) => c.id) },
+    T0,
+  );
+  assert.ok(next.ok);
+  assert.equal(next.room.state.history.length, 2);
+  assert.equal(next.room.state.history[1].trick, 1);
+});
+
+test("previousPlays excludes the live pile but keeps swept tricks", () => {
+  const a = { player: 0, combo: identify(hand("3D"))!, trick: 0 };
+  const b = { player: 1, combo: identify(hand("5S"))!, trick: 0 };
+  const c = { player: 2, combo: identify(hand("9H"))!, trick: 1 };
+  assert.deepEqual(previousPlays([a, b, c], c), [a, b]);
+  assert.deepEqual(previousPlays([a, b, c], null), [a, b, c]);
+  assert.deepEqual(previousPlays([a, b, c], c, 1), [b]);
+  assert.deepEqual(previousPlays([], null), []);
+});
+
+test("the history is capped so the room payload stays pollable", () => {
+  let r = seatEveryone(room(9));
+  let guard = 0;
+  while (!r.state.finished && guard++ < 400) {
+    const seat = r.state.turn;
+    const legal = legalMovesFor(r.state, seat);
+    const intent =
+      legal.length > 0
+        ? ({ kind: "play", cardIds: legal[0].cards.map((x) => x.id) } as const)
+        : ({ kind: "pass" } as const);
+    const result = applyIntent(r, seat, intent, T0);
+    assert.ok(result.ok);
+    r = result.room;
+    assert.ok(r.state.history.length <= HISTORY_LIMIT, "history stays capped");
+  }
 });

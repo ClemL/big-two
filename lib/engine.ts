@@ -12,8 +12,8 @@ import { beats, identify, legalMoves } from "./combos.ts";
 import { roundDeltas } from "./scoring.ts";
 
 export const PLAYER_COUNT = 4;
-/** How many recent plays the state carries for the table display. */
-export const HISTORY_LIMIT = 8;
+/** How many recent plays the state carries for the display. */
+export const HISTORY_LIMIT = 12;
 export const DEFAULT_NAMES = ["You", "Ada", "Bruce", "Chan"] as const;
 
 export interface PlayerState {
@@ -32,6 +32,8 @@ export interface LogEntry {
 export interface TablePlay {
   player: number;
   combo: Combo;
+  /** Which trick this play belonged to; lets the display group and age them. */
+  trick: number;
 }
 
 export interface GameState {
@@ -40,8 +42,11 @@ export interface GameState {
   turn: number;
   /** Combination that must be beaten; null when the table is clear. */
   table: TablePlay | null;
-  /** Recent plays, oldest first, for the shared table display. */
+  /** Recent plays, oldest first. Survives trick clears so the table can still
+   *  be read after it is swept. */
   history: TablePlay[];
+  /** Increments every time the table clears. */
+  trick: number;
   /** Player who owns the current pile and leads once everyone else passes. */
   leader: number;
   /** Players who have passed on the current trick. */
@@ -80,6 +85,7 @@ export function startRound(options: NewRoundOptions = {}): GameState {
     turn: starter,
     table: null,
     history: [],
+    trick: 0,
     leader: starter,
     passed: [false, false, false, false],
     openingPlay: true,
@@ -158,10 +164,11 @@ export function applyPlay(state: GameState, player: number, cards: readonly Card
   const hand = next.players[player];
   hand.hand = hand.hand.filter((c) => !ids.has(c.id));
 
-  next.table = { player, combo };
-  // A short window is all the table display needs, and it keeps the room
-  // payload small enough to poll.
-  next.history = [...next.history, { player, combo }].slice(-HISTORY_LIMIT);
+  const play: TablePlay = { player, combo, trick: next.trick };
+  next.table = play;
+  // Kept across trick clears so players can still see what has gone, and
+  // capped so the room payload stays small enough to poll.
+  next.history = [...next.history, play].slice(-HISTORY_LIMIT);
   next.leader = player;
   next.passed = [false, false, false, false];
   next.openingPlay = false;
@@ -198,7 +205,7 @@ export function applyPass(state: GameState, player: number): GameState {
   if (stillIn <= 1) {
     // Everybody folded to the pile owner: the table clears and they lead again.
     next.table = null;
-    next.history = [];
+    next.trick += 1;
     next.passed = [false, false, false, false];
     next.turn = next.leader;
     next.log.push({
@@ -211,6 +218,21 @@ export function applyPass(state: GameState, player: number): GameState {
 
   next.turn = nextActivePlayer(next, player);
   return next;
+}
+
+/**
+ * The plays before the one currently on the table, oldest first.
+ *
+ * When the table has been swept there is no current play, so everything recent
+ * is history — which is the point of keeping it past the clear.
+ */
+export function previousPlays(
+  history: readonly TablePlay[],
+  table: TablePlay | null,
+  count = 3,
+): TablePlay[] {
+  const withoutCurrent = table ? history.slice(0, -1) : history.slice();
+  return withoutCurrent.slice(-count);
 }
 
 export function nextRound(state: GameState): GameState {

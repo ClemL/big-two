@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useLingering } from "@/components/hooks";
 import { CardBack, CardView } from "@/components/CardView";
 import type { Card } from "@/lib/cards";
 import type { Combo } from "@/lib/combos";
@@ -37,6 +38,8 @@ export interface PreviousPlay {
   key: string;
   combo: Combo;
   playerName: string;
+  /** From a trick that has already been swept. */
+  spent?: boolean;
 }
 
 export interface TableViewProps {
@@ -56,6 +59,8 @@ export interface TableViewProps {
   /** Changing this replays the deal animation. */
   handKey: string;
   selected: string[];
+  /** Cards that cannot take part in any legal play right now. */
+  dimmed?: string[];
   canSelect: boolean;
   onToggleCard: (card: Card) => void;
   actions: ReactNode;
@@ -79,6 +84,7 @@ export function TableView({
   hand,
   handKey,
   selected,
+  dimmed = [],
   canSelect,
   onToggleCard,
   actions,
@@ -123,6 +129,7 @@ export function TableView({
       </section>
 
       <section className="table">
+        <DealAnimation key={`deal-${handKey}`} />
         {opponents.map((seat, i) => (
           <div key={seat.key} className={`${SEAT_CLASSES[i]} ${seat.isTurn ? "is-turn" : ""}`}>
             <div className="seat__name">
@@ -141,22 +148,7 @@ export function TableView({
         ))}
 
         <div className="pile">
-          {previousPlays.length > 0 ? (
-            /* Keyed on the newest entry so the whole strip slides across when a
-               play lands and the old pile joins the history. */
-            <div className="pile__history" key={previousPlays[previousPlays.length - 1].key}>
-              {previousPlays.map((play) => (
-                <div className="pile__history-entry" key={play.key}>
-                  <span className="pile__history-who">{play.playerName}</span>
-                  <div className="pile__history-cards">
-                    {play.combo.cards.map((card) => (
-                      <CardView key={card.id} card={card} />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : null}
+          <TrickHistory plays={previousPlays} />
 
           <div className="pile__current">
             {pile ? (
@@ -193,6 +185,7 @@ export function TableView({
             card={card}
             index={i}
             selected={selected.includes(card.id)}
+            dimmed={dimmed.includes(card.id)}
             disabled={!canSelect}
             onClick={onToggleCard}
           />
@@ -251,5 +244,60 @@ export function RoundSummary({
       </table>
       {action}
     </>
+  );
+}
+
+
+/**
+ * The plays already made, oldest on the left, ending beside the live pile.
+ *
+ * Entries linger for a moment after they drop off the end so they can animate
+ * out rather than blinking away, and plays from a swept trick fade back so the
+ * current trick still reads first.
+ */
+function TrickHistory({ plays }: { plays: PreviousPlay[] }) {
+  const leaving = useLingering(plays, (play) => play.key);
+  if (plays.length === 0 && leaving.length === 0) return null;
+  const newest = plays[plays.length - 1]?.key ?? "empty";
+
+  return (
+    /* Keyed on the newest entry so the strip slides across when a play lands. */
+    <div className="pile__history" key={newest}>
+      {leaving.map((play) => (
+        <div className="pile__history-entry is-leaving" key={`leaving-${play.key}`} aria-hidden="true">
+          <span className="pile__history-who">{play.playerName}</span>
+          <div className="pile__history-cards">
+            {play.combo.cards.map((card) => (
+              <CardView key={card.id} card={card} />
+            ))}
+          </div>
+        </div>
+      ))}
+      {plays.map((play) => (
+        <div className={`pile__history-entry ${play.spent ? "is-spent" : ""}`} key={play.key}>
+          <span className="pile__history-who">{play.playerName}</span>
+          <div className="pile__history-cards">
+            {play.combo.cards.map((card) => (
+              <CardView key={card.id} card={card} />
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** A quick flourish of cards going out to the four seats when a round is dealt. */
+function DealAnimation() {
+  return (
+    <div className="deal" aria-hidden="true">
+      {Array.from({ length: 16 }, (_, i) => (
+        <span
+          key={i}
+          className={`deal__card deal__card--${i % 4}`}
+          style={{ animationDelay: `${i * 55}ms` }}
+        />
+      ))}
+    </div>
   );
 }
