@@ -114,7 +114,9 @@ contests instead.
 
 ```
 app/            Next.js App Router entry, global stylesheet, icon
-components/     GameTable (all interaction), CardView, CardFace (SVG deck), RulesPanel,
+app/api/        Room routes (create, join, state, version, move)
+components/     TableView (shared layout), GameTable (single player), OnlineTable,
+                RoomLobby, CreateRoom, CardView, CardFace (SVG deck), RulesPanel,
                 Modal, BuildFooter
 lib/cards.ts    Deck, rank/suit ordering, seeded shuffle and deal
 lib/combos.ts   Combination detection, comparison, legal move generation
@@ -123,6 +125,8 @@ lib/scoring.ts  Hong Kong penalty multipliers
 lib/ai.ts       Opponent policies
 lib/strategy.ts Exact minimum-plays hand decomposition
 lib/sound.ts    Web Audio sound effects
+lib/room.ts     Multiplayer room model: seats, intents, redaction
+lib/server/     Room storage (Upstash REST + memory), crypto, request helpers
 public/         updates.txt (changelog)
 bench/          Self-play tournament (npm run bench)
 test/           node:test unit tests, including 450 simulated self-play rounds
@@ -132,6 +136,74 @@ The game engine is pure: `startRound`, `applyPlay` and `applyPass` return new
 state objects and never mutate their input, and dealing runs off a seeded PRNG
 (`mulberry32`) so any round can be replayed by seed. The React layer holds one
 `GameState` and re-renders from it.
+
+## Multiplayer
+
+Four humans, any mix of humans and AI, no accounts. `/play` starts a table with
+a password and hands back a six-character room code; everyone else opens
+`/room/<code>`, clicks a seat and enters the password. **Seats nobody takes are
+played by the AI**, so a round works with one human or four.
+
+### How a seat is identified
+
+The password gets you into the room. It does *not* identify you — on its own,
+anyone who knows it could submit moves as any seat. Claiming a seat returns a
+random 32-byte **seat token**, stored as an httpOnly cookie, and the server keeps
+only its SHA-256 hash. Every move is authorised by that token, not the password.
+Passwords are stored as PBKDF2-SHA256 (100k iterations) with a per-room salt.
+
+A seat silent for three minutes is treated as away: the AI plays its turns and
+someone else may claim it.
+
+### What the server keeps to itself
+
+The server is the only authority, and two rules follow:
+
+1. **The deal seed never leaves the server.** `mulberry32(seed)` reproduces every
+   hand, so publishing the seed publishes the whole deal.
+2. **A client is only ever sent its own cards.** Everyone else is a count.
+
+Move legality is re-checked server side with the same `validatePlay` the client
+uses — the client check is only there for a fast error message. Cards are matched
+against the seat's actual hand, so a forged card id is rejected rather than
+played.
+
+### Transport
+
+Turn-based polling, not sockets. Clients poll `GET /api/rooms/:id/version`,
+which is a ~200 byte payload, and fetch the full state only when the version
+moves. Polling pauses when the tab is hidden and resumes on focus.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `POST /api/rooms` | Start a table (password, AI style for empty seats) |
+| `POST /api/rooms/:id/join` | Claim a seat, receive the seat cookie |
+| `DELETE /api/rooms/:id/join` | Give the seat back to the AI |
+| `GET /api/rooms/:id/version` | Cheap poll: version, turn, seat status |
+| `GET /api/rooms/:id/state` | Full state, redacted for the caller's seat |
+| `POST /api/rooms/:id/move` | Play, pass or start the next round |
+
+Writes are compare-and-set on the room version. Serverless instances share no
+memory and requests interleave, so "read, decide, write" without a version check
+would silently drop one of two moves submitted at the same moment. On Upstash
+that is a small Lua script; the version lives in its own key so the check needs
+no JSON parsing inside Redis.
+
+### Storage
+
+Set `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` (see `.env.example`).
+Provision Upstash Redis from the Vercel Marketplace — Vercel's own KV product was
+retired in December 2024. There is no SDK dependency; the REST protocol is one
+JSON array per command.
+
+Without those variables the app falls back to an in-process Map. That is fine for
+`npm run dev` and for the tests, and wrong for a deployment: serverless instances
+do not share memory. `POST /api/rooms` reports which store is in use, and the
+server logs a warning in production.
+
+A room is about 2 KB and expires after a week of silence. Four players polling
+the version endpoint every 3 seconds is roughly 80 requests a minute for the
+table.
 
 ## Changelog footer
 
