@@ -152,6 +152,11 @@ export function RoomLobby({ roomId }: { roomId: string }) {
       <p className="lobby__hint">
         Share this link with the others: <code>{`/room/${room.id}`}</code>
       </p>
+      <p className="lobby__hint">
+        Playing round one table? Open <a href={`/room/${room.id}/table`}>the table display</a> on a
+        tablet and put it in the middle. Phones then show only your own hand and buttons.
+        {room.tableSeatActive ? " A table display is already running." : ""}
+      </p>
     </main>
   );
 }

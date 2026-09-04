@@ -4,6 +4,12 @@ import { mulberry32 } from "../lib/cards.ts";
 import { legalMovesFor } from "../lib/engine.ts";
 import {
   SEAT_IDLE_MS,
+  TABLE_IDLE_MS,
+  applyTableIntent,
+  claimTableSeat,
+  isTableSeatToken,
+  releaseTableSeat,
+  tableSeatActive,
   advanceAutomatedSeats,
   applyIntent,
   claimSeat,
@@ -231,4 +237,101 @@ test("a full round can be played out through intents alone", () => {
   assert.ok(after.ok);
   assert.equal(after.room.state.finished, false);
   assert.equal(after.room.state.roundNumber, r.state.roundNumber + 1);
+});
+
+/* ---------------------------------------------------------------------- */
+/* Table display                                                           */
+/* ---------------------------------------------------------------------- */
+
+test("the table display can be claimed, is recognised by its token and expires", () => {
+  const claimed = claimTableSeat(room(), "tablehash", T0);
+  assert.equal(tableSeatActive(claimed, T0), true);
+  assert.equal(isTableSeatToken(claimed, "tablehash"), true);
+  assert.equal(isTableSeatToken(claimed, "someoneelse"), false);
+  assert.equal(isTableSeatToken(claimed, null), false);
+  assert.equal(tableSeatActive(claimed, T0 + TABLE_IDLE_MS + 1), false);
+  assert.equal(tableSeatActive(releaseTableSeat(claimed, T0), T0), false);
+});
+
+test("the table display never receives anybody's cards", () => {
+  const r = claimTableSeat(seatEveryone(room(42)), "tablehash", T0);
+  const view = publicRoom(r, null, T0, true);
+  assert.ok(view.seats.every((s) => s.hand === undefined));
+  assert.equal(JSON.stringify(view).includes(String(r.state.seed)), false);
+  assert.equal(view.isTableSeat, true);
+  assert.equal(view.tableSeatActive, true);
+  // Counts are still public, which is what the display is for.
+  assert.deepEqual(
+    view.seats.map((s) => s.cards),
+    [13, 13, 13, 13],
+  );
+});
+
+test("a seated player is still served their own hand while a table is active", () => {
+  const r = claimTableSeat(seatEveryone(room(42)), "tablehash", T0);
+  const view = publicRoom(r, 2, T0);
+  assert.equal(view.seats[2].hand?.length, 13);
+  assert.equal(view.tableSeatActive, true);
+  assert.equal(view.isTableSeat, false);
+});
+
+test("the table display can reset the match and adjust a score", () => {
+  let r = claimTableSeat(seatEveryone(room(42)), "tablehash", T0);
+  const adjusted = applyTableIntent(r, { kind: "adjustScore", seat: 1, delta: -5 }, T0);
+  assert.ok(adjusted.ok);
+  assert.equal(adjusted.room.state.scores[1], -5);
+  assert.equal(adjusted.room.version, r.version + 1);
+
+  r = adjusted.room;
+  const reset = applyTableIntent(r, { kind: "resetMatch" }, T0);
+  assert.ok(reset.ok);
+  assert.deepEqual(reset.room.state.scores, [0, 0, 0, 0]);
+  assert.equal(reset.room.state.finished, false);
+  for (const p of reset.room.state.players) assert.equal(p.hand.length, 13);
+  // Seating survives a reset.
+  assert.deepEqual(
+    reset.room.state.players.map((p) => p.name),
+    ["P0", "P1", "P2", "P3"],
+  );
+});
+
+test("score adjustments are bounded and seat-checked", () => {
+  const r = claimTableSeat(seatEveryone(room()), "tablehash", T0);
+  for (const bad of [
+    { seat: 9, delta: 1 },
+    { seat: -1, delta: 1 },
+    { seat: 0, delta: 10_000 },
+    { seat: 0, delta: 1.5 },
+    { seat: 0, delta: Number.NaN },
+  ]) {
+    const result = applyTableIntent(r, { kind: "adjustScore", ...bad }, T0);
+    assert.equal(result.ok, false, JSON.stringify(bad));
+  }
+});
+
+test("the table display cannot skip an unfinished round", () => {
+  const r = claimTableSeat(seatEveryone(room(42)), "tablehash", T0);
+  const early = applyTableIntent(r, { kind: "nextRound" }, T0);
+  assert.equal(early.ok, false);
+});
+
+test("plays accumulate in the history and clear with the table", () => {
+  let r = seatEveryone(room(42));
+  assert.deepEqual(r.state.history, []);
+  const seat = r.state.turn;
+  const opening = legalMovesFor(r.state, seat)[0];
+  const played = applyIntent(r, seat, { kind: "play", cardIds: opening.cards.map((c) => c.id) }, T0);
+  assert.ok(played.ok);
+  r = played.room;
+  assert.equal(r.state.history.length, 1);
+  assert.equal(r.state.history[0].player, seat);
+
+  // Three passes sweep the trick, and the display should stop showing it.
+  for (let i = 0; i < 3; i++) {
+    const result = applyIntent(r, r.state.turn, { kind: "pass" }, T0);
+    assert.ok(result.ok);
+    r = result.room;
+  }
+  assert.equal(r.state.table, null);
+  assert.deepEqual(r.state.history, []);
 });

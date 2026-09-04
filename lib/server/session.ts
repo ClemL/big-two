@@ -9,16 +9,44 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import type { Room } from "../room.ts";
-import { seatForToken } from "../room.ts";
+import { isTableSeatToken, seatForToken } from "../room.ts";
 import { sha256Hex } from "./crypto.ts";
 import { getRoomStore, type SaveResult } from "./store.ts";
 
 export const seatCookieName = (roomId: string) => `bigtwo_seat_${roomId}`;
+export const tableCookieName = (roomId: string) => `bigtwo_table_${roomId}`;
 
 const COOKIE_MAX_AGE = 7 * 24 * 60 * 60;
 
 export function readSeatToken(request: NextRequest, roomId: string): string | null {
   return request.cookies.get(seatCookieName(roomId))?.value ?? null;
+}
+
+export function readTableToken(request: NextRequest, roomId: string): string | null {
+  return request.cookies.get(tableCookieName(roomId))?.value ?? null;
+}
+
+/** True when this request is the tablet acting as the shared table. */
+export async function isTableSeatRequest(request: NextRequest, room: Room): Promise<boolean> {
+  const token = readTableToken(request, room.id);
+  if (!token) return false;
+  return isTableSeatToken(room, await sha256Hex(token));
+}
+
+export function setTableCookie(response: NextResponse, roomId: string, token: string): void {
+  response.cookies.set({
+    name: tableCookieName(roomId),
+    value: token,
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: COOKIE_MAX_AGE,
+  });
+}
+
+export function clearTableCookie(response: NextResponse, roomId: string): void {
+  response.cookies.set({ name: tableCookieName(roomId), value: "", path: "/", maxAge: 0 });
 }
 
 export function setSeatCookie(response: NextResponse, roomId: string, token: string): void {

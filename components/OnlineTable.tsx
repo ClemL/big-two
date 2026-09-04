@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal } from "@/components/Modal";
 import { RulesPanel } from "@/components/RulesPanel";
+import { PocketView } from "@/components/PocketView";
 import { RoundSummary, TableView, type OpponentSeat } from "@/components/TableView";
 import type { Card, SortMode } from "@/lib/cards";
 import { sortHand } from "@/lib/cards";
@@ -226,6 +227,91 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
     };
   });
 
+  const actionButtons = (
+    <>
+      <button type="button" className="btn btn--primary" onClick={play} disabled={!myTurn || busy}>
+        Play
+      </button>
+      <button
+        type="button"
+        className="btn"
+        onClick={() => void send({ action: "pass" })}
+        disabled={!canPass || busy}
+      >
+        Pass
+      </button>
+      <button type="button" className="btn" onClick={hint} disabled={!myTurn || busy}>
+        Hint
+      </button>
+      <button
+        type="button"
+        className="btn"
+        onClick={() => setSelected([])}
+        disabled={selected.length === 0}
+      >
+        Clear
+      </button>
+      <button
+        type="button"
+        className="btn btn--ghost"
+        onClick={() => setSortMode((m) => (m === "rank" ? "suit" : "rank"))}
+      >
+        Sort: {sortMode === "rank" ? "rank" : "suit"}
+      </button>
+    </>
+  );
+
+  const summary =
+    room.finished && room.lastDeltas ? (
+      <Modal title={`${seatName(room.winner!)} won round ${room.roundNumber}`}>
+        <RoundSummary
+          rows={room.seats.map((s) => ({
+            key: s.index,
+            name: s.name,
+            cards: s.cards,
+            delta: room.lastDeltas![s.index],
+            total: room.scores[s.index],
+            isWinner: s.index === room.winner,
+          }))}
+          action={
+            room.tableSeatActive ? (
+              <p className="lobby__hint">The table deals the next round.</p>
+            ) : (
+              <button
+                type="button"
+                className="btn btn--primary"
+                onClick={() => void send({ action: "nextRound" })}
+                disabled={busy || seat === null}
+              >
+                Next round
+              </button>
+            )
+          }
+        />
+      </Modal>
+    ) : null;
+
+  // A tablet is showing the shared state to the room, so the phone only needs
+  // to carry this player's own hand and actions.
+  if (room.tableSeatActive && seat !== null) {
+    return (
+      <PocketView
+        roomLabel={`Room ${room.id}`}
+        seatLabel={`Seat ${seat + 1} · ${seatName(seat)}`}
+        status={status}
+        message={message}
+        toBeat={room.table?.combo ?? null}
+        hand={myHand}
+        handKey={`${room.id}-${room.roundNumber}`}
+        selected={selected}
+        canSelect={myTurn && !busy}
+        onToggleCard={toggleCard}
+        actions={actionButtons}
+        overlay={summary}
+      />
+    );
+  }
+
   return (
     <TableView
       subtitle={`Room ${room.id} · ${seat === null ? "watching" : `you are ${seatName(seat)}`}`}
@@ -275,71 +361,9 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
       selected={selected}
       canSelect={myTurn && !busy}
       onToggleCard={toggleCard}
-      actions={
-        <>
-          <button
-            type="button"
-            className="btn btn--primary"
-            onClick={play}
-            disabled={!myTurn || busy}
-          >
-            Play
-          </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => void send({ action: "pass" })}
-            disabled={!canPass || busy}
-          >
-            Pass
-          </button>
-          <button type="button" className="btn" onClick={hint} disabled={!myTurn || busy}>
-            Hint
-          </button>
-          <button
-            type="button"
-            className="btn"
-            onClick={() => setSelected([])}
-            disabled={selected.length === 0}
-          >
-            Clear
-          </button>
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={() => setSortMode((m) => (m === "rank" ? "suit" : "rank"))}
-          >
-            Sort: {sortMode === "rank" ? "rank" : "suit"}
-          </button>
-        </>
-      }
+      actions={actionButtons}
       log={room.log}
-      overlay={
-        room.finished && room.lastDeltas ? (
-          <Modal title={`${seatName(room.winner!)} won round ${room.roundNumber}`}>
-            <RoundSummary
-              rows={room.seats.map((s) => ({
-                key: s.index,
-                name: s.name,
-                cards: s.cards,
-                delta: room.lastDeltas![s.index],
-                total: room.scores[s.index],
-                isWinner: s.index === room.winner,
-              }))}
-              action={
-                <button
-                  type="button"
-                  className="btn btn--primary"
-                  onClick={() => void send({ action: "nextRound" })}
-                  disabled={busy || seat === null}
-                >
-                  Next round
-                </button>
-              }
-            />
-          </Modal>
-        ) : null
-      }
+      overlay={summary}
     />
   );
 }
