@@ -5,10 +5,17 @@ import { Modal } from "@/components/Modal";
 import { RulesPanel } from "@/components/RulesPanel";
 import { PocketView } from "@/components/PocketView";
 import { RoundSummary, TableView, type OpponentSeat } from "@/components/TableView";
-import { useAutoPass, useGameKeys, useTurnSignal } from "@/components/hooks";
+import {
+  useAutoHint,
+  useAutoPass,
+  useDoubleTap,
+  useGameKeys,
+  useTurnSignal,
+} from "@/components/hooks";
 import type { Card, SortMode } from "@/lib/cards";
 import { sortHand } from "@/lib/cards";
 import { comboName, identify, legalMoves } from "@/lib/combos";
+import { previousPlays } from "@/lib/engine";
 import * as sound from "@/lib/sound";
 import type { PublicRoom } from "@/lib/room";
 
@@ -150,17 +157,25 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
     [roomId, room.version, refresh],
   );
 
+  const registerTap = useDoubleTap();
+
   const toggleCard = useCallback(
     (card: Card) => {
-      if (!myTurn) return;
+      if (!myTurn || busy) return;
       setMessage("");
+      // Tapping the same card twice plays it when that single would be legal;
+      // the server re-checks either way.
+      if (registerTap(card.id) && myMoves.some((m) => m.size === 1 && m.cards[0].id === card.id)) {
+        void send({ action: "play", cardIds: [card.id] });
+        return;
+      }
       setSelected((prev) => {
         const isSelected = prev.includes(card.id);
         sound.play(isSelected ? "deselect" : "select");
         return isSelected ? prev.filter((id) => id !== card.id) : [...prev, card.id];
       });
     },
-    [myTurn],
+    [myTurn, busy, registerTap, myMoves, send],
   );
 
   const canPass = myTurn && room.table !== null;
@@ -196,6 +211,14 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
     setMuted(next);
     if (!next) sound.unlock();
   }, [muted]);
+
+  const dimmed = useMemo(() => {
+    if (!myTurn || myMoves.length === 0) return [];
+    const playable = new Set(myMoves.flatMap((move) => move.cards.map((c) => c.id)));
+    return myHand.filter((card) => !playable.has(card.id)).map((card) => card.id);
+  }, [myTurn, myMoves, myHand]);
+
+  useAutoHint(myTurn, hint);
 
   // A phone spends the game face down when a tablet is the table.
   useTurnSignal(myTurn, seat !== null);
@@ -318,6 +341,7 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
         hand={myHand}
         handKey={`${room.id}-${room.roundNumber}`}
         selected={selected}
+        dimmed={dimmed}
         canSelect={myTurn && !busy}
         onToggleCard={toggleCard}
         actions={actionButtons}
@@ -367,10 +391,11 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
             }
           : null
       }
-      previousPlays={room.history.slice(0, -1).slice(-3).map((play) => ({
-        key: `${play.player}-${play.combo.cards.map((c) => c.id).join("")}`,
+      previousPlays={previousPlays(room.history, room.table).map((play) => ({
+        key: `${play.trick}-${play.player}-${play.combo.cards.map((c) => c.id).join("")}`,
         combo: play.combo,
         playerName: seatName(play.player),
+        spent: room.table !== null && play.trick < room.table.trick,
       }))}
       clearTableLeader={seatName(room.leader)}
       status={status}
@@ -378,6 +403,7 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
       hand={myHand}
       handKey={`${room.id}-${room.roundNumber}`}
       selected={selected}
+      dimmed={dimmed}
       canSelect={myTurn && !busy}
       onToggleCard={toggleCard}
       actions={actionButtons}

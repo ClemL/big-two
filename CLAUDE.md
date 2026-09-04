@@ -147,6 +147,11 @@ almost nowhere else.
 * Animation is CSS-only and lives in `globals.css`. Replaying an animation means changing a React
   `key` (the pile is keyed on the played cards, the hand on the round), not toggling a class. Every
   animation must stay behind the `prefers-reduced-motion` block at the end of the stylesheet.
+* `GameState.history` outlives the trick and is capped at `HISTORY_LIMIT`; each play carries the
+  trick it belonged to, which is how the display fades spent tricks back. `previousPlays()` is the
+  one place that decides what "before the current pile" means — all three views call it.
+* Exit animations need `useLingering`: React unmounts a removed item immediately, so an entry that
+  should collapse out has to be kept in the render for the length of its animation.
 * Shared client behaviour lives in `components/hooks.ts` — turn signals, keyboard shortcuts, the
   auto-pass timer. Both tables use them, so a change lands in both.
 * Sound is synthesized in `lib/sound.ts`; do not add audio files. Browsers block audio until a user

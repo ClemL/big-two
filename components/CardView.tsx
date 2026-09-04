@@ -12,6 +12,8 @@ interface CardViewProps {
   index?: number;
   /** Seat the card was played from, so it flies in from that direction. */
   from?: number;
+  /** Cannot take part in any legal play right now. */
+  dimmed?: boolean;
   onClick?: (card: Card) => void;
 }
 
@@ -23,7 +25,15 @@ const FLY_FROM: Record<number, [string, string]> = {
   3: ["280px", "-60px"],
 };
 
-export function CardView({ card, selected = false, disabled = false, index = 0, from, onClick }: CardViewProps) {
+export function CardView({
+  card,
+  selected = false,
+  disabled = false,
+  index = 0,
+  from,
+  dimmed = false,
+  onClick,
+}: CardViewProps) {
   const label = `${RANKS[card.rank]} of ${SUIT_NAME[SUITS[card.suit]]}`;
   const style: React.CSSProperties & Record<string, string | number> = {
     "--i": index,
@@ -36,7 +46,12 @@ export function CardView({ card, selected = false, disabled = false, index = 0, 
     style["--from-y"] = y;
   }
 
-  const className = ["card", selected ? "is-selected" : "", onClick ? "is-clickable" : ""]
+  const className = [
+    "card",
+    selected ? "is-selected" : "",
+    dimmed ? "is-dimmed" : "",
+    onClick ? "is-clickable" : "",
+  ]
     .filter(Boolean)
     .join(" ");
 

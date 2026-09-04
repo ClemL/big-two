@@ -20,3 +20,9 @@
 2026-09-04T03:00:00Z - Your turn now chimes and vibrates on a phone, and the table display calls out the seat to play.
 2026-09-04T03:00:00Z - Added a web manifest and link preview image, so the table display can be saved to a tablet home screen.
 2026-09-04T03:00:00Z - A crash now offers a way back instead of a blank screen.
+2026-09-04T04:20:00Z - Played tricks now stay on the table after it is swept, faded back, so you can see what has already gone.
+2026-09-04T04:20:00Z - Trick history animates: entries slide in as plays land and collapse out as they age off.
+2026-09-04T04:20:00Z - The hint now fires by itself when your turn arrives, so the suggested play is already selected.
+2026-09-04T04:20:00Z - Tapping the same card twice plays it, when that single is legal on its own.
+2026-09-04T04:20:00Z - Cards that cannot be part of any legal play are greyed out while it is your turn.
+2026-09-04T04:20:00Z - Rounds open with the cards being dealt out to the four seats.

@@ -287,8 +287,28 @@ passes for you after a beat rather than asking you to confirm the inevitable.
 
 The three plays before the current one sit to the left of the pile, oldest
 first, and the strip slides across when a new play lands and the old pile joins
-it. The trick history clears when the table does. It is hidden on phones, which
-have no room for it — and unnecessary when a tablet is acting as the table.
+it. **The record outlives the trick**: when the table is swept the pile goes but
+the plays stay, faded back, so you can still see what has already been spent.
+Entries linger for a beat as they drop off the end so they collapse out rather
+than blinking away. Hidden on phones, which have no room for it — and
+unnecessary when a tablet is acting as the table.
+
+### Choosing a card
+
+* **The hint fires on its own** when your turn arrives, so the suggested play is
+  already selected and Enter is enough.
+* **Cards that cannot be part of any legal play are greyed out** — against a
+  single that is everything lower, against a pair or triple everything that
+  cannot make a higher one, and when a five-card hand is on the table everything
+  that cannot help build one.
+* **Tapping the same card twice plays it**, when that single is legal on its own.
+  A slower second tap still just deselects, so nothing changes for anyone who
+  taps at a normal pace.
+
+### Dealing
+
+A round opens with cards flying out from the middle of the table to the four
+seats before the hand fans in.
 
 ### Turn signals
 

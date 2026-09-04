@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CardView } from "@/components/CardView";
 import { Modal } from "@/components/Modal";
 import { comboName } from "@/lib/combos";
+import { previousPlays } from "@/lib/engine";
 import { useTableTurnSignal } from "@/components/hooks";
 import * as sound from "@/lib/sound";
 import type { PublicRoom } from "@/lib/room";
@@ -118,8 +119,9 @@ export function TableDisplay({
   useTableTurnSignal(room.turn, room.finished);
 
   const table = room.table;
-  // The plays before the current one, most recent first.
-  const previous = room.history.slice(0, -1).slice(-3).reverse();
+  // The plays before the current one, most recent first. History outlives the
+  // trick, so a swept table can still be read.
+  const previous = previousPlays(room.history, table).slice().reverse();
 
   return (
     <main className="table-display">
@@ -256,7 +258,10 @@ export function TableDisplay({
           <span className="table-history__empty">Nothing yet this trick</span>
         ) : (
           previous.map((play, i) => (
-            <div className="table-history__entry" key={`${play.player}-${play.combo.cards[0].id}`}>
+            <div
+              className="table-history__entry"
+              key={`${play.trick}-${play.player}-${play.combo.cards[0].id}`}
+            >
               <span className="table-history__who">
                 {room.seats[play.player].name} · {comboName(play.combo)}
               </span>
