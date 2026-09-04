@@ -94,6 +94,9 @@ update `test/` and the in-app rules panel in the same commit.
 * **The password endpoints are rate limited.** PBKDF2 means every guess costs server time, so an
   unthrottled endpoint is both a guessing oracle and a bill. Limits are per caller *and* per room —
   dropping the room-wide one lets an attacker rotate IPs.
+* **Presence is refreshed by the version poll, not only by a state fetch.** Tying it to state
+  fetches meant a table where nobody moved aged every watching player out, and the AI took their
+  seats. The poll only writes when presence is over a minute stale, so it stays cheap.
 * **Room writes are compare-and-set on the version.** Requests interleave across serverless
   instances, so an unconditional write silently drops concurrent moves.
 
@@ -136,6 +139,11 @@ almost nowhere else.
   the viewer sits at the bottom. Change the layout there, not in one of the two tables.
 * The build footer reads `public/updates.txt` at runtime and fails silently if it is missing.
   Version and build stamp are inlined at build time by `next.config.mjs`.
+* Touch rules are not decoration: cards and buttons set `touch-action: manipulation` (the
+  double-tap-to-zoom delay otherwise fights tap-twice-to-play), and every `:hover` rule lives inside
+  `@media (hover: hover) and (pointer: fine)` because hover latches after a tap on a touchscreen.
+* Nothing in the hand may take a `z-index` above its neighbours. Raising a chosen card also raises
+  its hit area over the next card's, which on a fanned hand makes that card untappable.
 * Card size lives in three `:root` variables — `--card-w`, `--card-h`, `--hand-overlap`. The hand is
   one non-wrapping overlapping row; a context that needs a different size sets the variables rather
   than adding rules. Media queries that change them must come after the wider ones, since they share

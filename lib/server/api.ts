@@ -37,6 +37,17 @@ import { getRoomStore, type SaveResult } from "./store.ts";
 
 const AI_STYLES: AiStyle[] = ["weakest", "random", "strategist"];
 
+/**
+ * How stale presence has to get before the version poll rewrites it.
+ *
+ * Presence used to be refreshed only when the full state was fetched, which
+ * happens only when the version moves — so a quiet table aged everyone out and
+ * the AI took over seats whose owners were watching. Refreshing on the poll
+ * fixes that, and the threshold keeps it to roughly one write a minute per
+ * client rather than one per poll.
+ */
+const PRESENCE_REFRESH_MS = 60_000;
+
 export const seatCookieName = (roomId: string) => `bigtwo_seat_${roomId}`;
 export const tableCookieName = (roomId: string) => `bigtwo_table_${roomId}`;
 
@@ -164,10 +175,23 @@ export async function stateEndpoint(request: Request, roomId: string): Promise<R
   return json(publicRoom(room, null));
 }
 
-export async function versionEndpoint(roomId: string): Promise<Response> {
+export async function versionEndpoint(request: Request, roomId: string): Promise<Response> {
   const room = await loadRoom(roomId);
   if (!room) return jsonError("Room not found.", 404);
-  return json(roomVersion(room));
+
+  const now = Date.now();
+  if (await isTableDevice(request, room)) {
+    if (now - (room.tableSeat?.lastSeen ?? 0) > PRESENCE_REFRESH_MS) {
+      // Presence never changes the version, so this does not wake anyone.
+      await getRoomStore().save(touchTableSeat(room, now), room.version);
+    }
+  } else {
+    const seat = await seatOf(request, room);
+    if (seat !== null && now - room.seats[seat].lastSeen > PRESENCE_REFRESH_MS) {
+      await getRoomStore().save(touchSeat(room, seat, now), room.version);
+    }
+  }
+  return json(roomVersion(room, now));
 }
 
 function parseIntent(body: { action?: unknown; cardIds?: unknown }): Intent | null {

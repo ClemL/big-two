@@ -166,3 +166,41 @@ export function useAutoHint(isMyTurn: boolean, hint: () => void, enabled = true)
     wasMyTurn.current = isMyTurn;
   }, [isMyTurn, hint, enabled]);
 }
+
+
+/**
+ * Hold the screen awake while a game is in front of you.
+ *
+ * A tablet propped in the middle of the table dims and sleeps mid-round
+ * otherwise, and a phone that sleeps stops polling, which is what used to hand
+ * a seat to the AI. The lock is dropped by the browser whenever the page is
+ * hidden, so it has to be re-taken on the way back.
+ */
+export function useWakeLock(active: boolean): void {
+  useEffect(() => {
+    if (!active || typeof navigator === "undefined" || !("wakeLock" in navigator)) return;
+
+    let sentinel: WakeLockSentinel | null = null;
+    let released = false;
+
+    const acquire = async () => {
+      try {
+        sentinel = await navigator.wakeLock.request("screen");
+      } catch {
+        // Denied, unsupported, or the tab is not visible. Not worth surfacing.
+      }
+    };
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && !released) void acquire();
+    };
+
+    void acquire();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      released = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      void sentinel?.release().catch(() => {});
+    };
+  }, [active]);
+}

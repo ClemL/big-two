@@ -11,6 +11,7 @@ import {
   useDoubleTap,
   useGameKeys,
   useTurnSignal,
+  useWakeLock,
 } from "@/components/hooks";
 import type { Card, SortMode } from "@/lib/cards";
 import { sortHand } from "@/lib/cards";
@@ -222,6 +223,8 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
 
   // A phone spends the game face down when a tablet is the table.
   useTurnSignal(myTurn, seat !== null);
+  // A sleeping phone stops polling, which is what used to lose people their seat.
+  useWakeLock(seat !== null);
   useAutoPass(myTurn && !busy && myMoves.length === 0 && room.table !== null, () => {
     void send({ action: "pass" });
   });

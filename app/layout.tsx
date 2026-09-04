@@ -20,6 +20,9 @@ export const viewport: Viewport = {
   themeColor: "#0b3d2e",
   width: "device-width",
   initialScale: 1,
+  // Lets the layout paint under the notch and home indicator; the safe-area
+  // insets in globals.css keep the controls out from under them.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -30,8 +30,14 @@ import {
 } from "./engine.ts";
 
 export const SEAT_COUNT = PLAYER_COUNT;
-/** A seat is considered away, and played by the AI, after this long silent. */
-export const SEAT_IDLE_MS = 3 * 60 * 1000;
+/**
+ * A seat is considered away, and played by the AI, after this long silent.
+ *
+ * Generous on purpose: a phone locks its screen within a minute, which stops
+ * the client polling, so a short window hands seats to the AI while their owner
+ * is sitting right there looking at the table.
+ */
+export const SEAT_IDLE_MS = 10 * 60 * 1000;
 
 /**
  * The shared table display — a tablet sitting in the middle of the real table.
@@ -168,7 +174,7 @@ export function seatForToken(room: Room, tokenHash: string | null): number | nul
 }
 
 /** The table display is considered gone after this long without a poll. */
-export const TABLE_IDLE_MS = 2 * 60 * 1000;
+export const TABLE_IDLE_MS = 10 * 60 * 1000;
 
 export function tableSeatActive(room: Room, now = Date.now()): boolean {
   return room.tableSeat !== null && now - room.tableSeat.lastSeen < TABLE_IDLE_MS;

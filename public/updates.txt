@@ -26,3 +26,9 @@
 2026-09-04T04:20:00Z - Tapping the same card twice plays it, when that single is legal on its own.
 2026-09-04T04:20:00Z - Cards that cannot be part of any legal play are greyed out while it is your turn.
 2026-09-04T04:20:00Z - Rounds open with the cards being dealt out to the four seats.
+2026-09-04T05:10:00Z - Fixed seats being handed to the AI while their owner was watching: a quiet table no longer ages players out, and the away window is now ten minutes.
+2026-09-04T05:10:00Z - The screen is kept awake while you are seated or running the table display.
+2026-09-04T05:10:00Z - On a phone the hand now wraps to two rows, so every card is a proper touch target instead of a 24px sliver.
+2026-09-04T05:10:00Z - Touch handling: no zoom delay on a double tap, no grey tap flash, no long-press selection, and no pull-to-refresh mid-game.
+2026-09-04T05:10:00Z - Hover styles no longer stick to cards after you tap them on a touchscreen.
+2026-09-04T05:10:00Z - Controls clear the notch and home indicator, and tapping a field no longer zooms the page on iOS.
