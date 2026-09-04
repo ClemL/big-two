@@ -33,6 +33,15 @@ export const SEAT_COUNT = PLAYER_COUNT;
 /** A seat is considered away, and played by the AI, after this long silent. */
 export const SEAT_IDLE_MS = 3 * 60 * 1000;
 
+/**
+ * The shared table display — a tablet sitting in the middle of the real table.
+ * It holds no cards; it shows the game to everyone and runs the match.
+ */
+export interface TableSeatRecord {
+  tokenHash: string;
+  lastSeen: number;
+}
+
 export interface SeatRecord {
   name: string;
   /** null means nobody has claimed the seat, so the AI plays it. */
@@ -47,6 +56,7 @@ export interface Room {
   passwordHash: string;
   salt: string;
   seats: SeatRecord[];
+  tableSeat: TableSeatRecord | null;
   state: GameState;
   aiStyle: AiStyle;
   createdAt: number;
@@ -76,6 +86,7 @@ export function createRoom(options: CreateRoomOptions): Room {
     passwordHash: options.passwordHash,
     salt: options.salt,
     seats: DEFAULT_SEAT_NAMES.map((name) => ({ name, tokenHash: null, lastSeen: 0 })),
+    tableSeat: null,
     state: startRound({ seed: options.seed, names: DEFAULT_SEAT_NAMES }),
     aiStyle: options.aiStyle ?? "weakest",
     createdAt: now,
@@ -154,6 +165,78 @@ export function seatForToken(room: Room, tokenHash: string | null): number | nul
   if (!tokenHash) return null;
   const index = room.seats.findIndex((seat) => seat.tokenHash === tokenHash);
   return index === -1 ? null : index;
+}
+
+/** The table display is considered gone after this long without a poll. */
+export const TABLE_IDLE_MS = 2 * 60 * 1000;
+
+export function tableSeatActive(room: Room, now = Date.now()): boolean {
+  return room.tableSeat !== null && now - room.tableSeat.lastSeen < TABLE_IDLE_MS;
+}
+
+export function claimTableSeat(room: Room, tokenHash: string, now = Date.now()): Room {
+  // Only one display at a time; a fresh claim takes over from a stale one.
+  return bump({ ...room, tableSeat: { tokenHash, lastSeen: now } }, now);
+}
+
+export function releaseTableSeat(room: Room, now = Date.now()): Room {
+  return bump({ ...room, tableSeat: null }, now);
+}
+
+export function isTableSeatToken(room: Room, tokenHash: string | null): boolean {
+  return tokenHash !== null && room.tableSeat?.tokenHash === tokenHash;
+}
+
+export function touchTableSeat(room: Room, now = Date.now()): Room {
+  if (!room.tableSeat) return room;
+  // Presence only, so the version stays put and no client is woken.
+  return { ...room, tableSeat: { ...room.tableSeat, lastSeen: now } };
+}
+
+/** Actions only the table display may take. */
+export type TableIntent =
+  | { kind: "nextRound" }
+  | { kind: "resetMatch" }
+  | { kind: "adjustScore"; seat: number; delta: number };
+
+export function applyTableIntent(
+  room: Room,
+  intent: TableIntent,
+  now = Date.now(),
+  rng = Math.random,
+): RoomResult {
+  const touched = touchTableSeat(room, now);
+
+  if (intent.kind === "nextRound") {
+    if (!touched.state.finished) {
+      return { ok: false, error: "The round is still going.", status: 409 };
+    }
+    const next = { ...touched, state: nextRound(touched.state) };
+    return { ok: true, room: bump(advanceAutomatedSeats(next, now, rng), now) };
+  }
+
+  if (intent.kind === "resetMatch") {
+    // Fresh deal and the chips back to zero, keeping who is sitting where.
+    const next = {
+      ...touched,
+      state: startRound({ names: touched.state.players.map((p) => p.name) }),
+    };
+    return { ok: true, room: bump(advanceAutomatedSeats(next, now, rng), now) };
+  }
+
+  const { seat, delta } = intent;
+  if (!Number.isInteger(seat) || seat < 0 || seat >= SEAT_COUNT) {
+    return { ok: false, error: "No such seat.", status: 400 };
+  }
+  if (!Number.isFinite(delta) || !Number.isInteger(delta) || Math.abs(delta) > 500) {
+    return { ok: false, error: "Adjustment out of range.", status: 400 };
+  }
+  const scores = touched.state.scores.slice();
+  scores[seat] += delta;
+  return {
+    ok: true,
+    room: bump({ ...touched, state: { ...touched.state, scores } }, now),
+  };
 }
 
 export type Intent =
@@ -254,6 +337,12 @@ export interface PublicRoom {
   id: string;
   version: number;
   seat: number | null;
+  /** True when a tablet is acting as the shared table. */
+  tableSeatActive: boolean;
+  /** Set when this client is the table display rather than a player. */
+  isTableSeat: boolean;
+  /** Recent plays for the table display, oldest first. */
+  history: TablePlay[];
   seats: PublicSeat[];
   turn: number;
   table: TablePlay | null;
@@ -272,19 +361,27 @@ export interface PublicRoom {
 }
 
 /** The room as one seat is allowed to see it. Never includes the seed. */
-export function publicRoom(room: Room, seat: number | null, now = Date.now()): PublicRoom {
+export function publicRoom(
+  room: Room,
+  seat: number | null,
+  now = Date.now(),
+  isTableSeat = false,
+): PublicRoom {
   const state = room.state;
   return {
     id: room.id,
     version: room.version,
     seat,
+    tableSeatActive: tableSeatActive(room, now),
+    isTableSeat,
+    history: state.history,
     seats: room.seats.map((record, i) => ({
       index: i,
       name: record.name,
       cards: state.players[i].hand.length,
       claimed: isSeatClaimed(record),
       automated: seatIsAutomated(room, i, now),
-      hand: i === seat ? state.players[i].hand : undefined,
+      hand: !isTableSeat && i === seat ? state.players[i].hand : undefined,
     })),
     turn: state.turn,
     table: state.table,
@@ -307,6 +404,7 @@ export interface RoomVersion {
   version: number;
   turn: number;
   finished: boolean;
+  tableSeatActive: boolean;
   seats: { claimed: boolean; automated: boolean; name: string }[];
 }
 
@@ -315,6 +413,7 @@ export function roomVersion(room: Room, now = Date.now()): RoomVersion {
     version: room.version,
     turn: room.state.turn,
     finished: room.state.finished,
+    tableSeatActive: tableSeatActive(room, now),
     seats: room.seats.map((record, i) => ({
       claimed: isSeatClaimed(record),
       automated: seatIsAutomated(room, i, now),

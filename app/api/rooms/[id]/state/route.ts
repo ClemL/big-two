@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { publicRoom, touchSeat } from "@/lib/room";
+import { publicRoom, touchSeat, touchTableSeat } from "@/lib/room";
 import { getRoomStore } from "@/lib/server/store";
-import { jsonError, loadRoomOr404, resolveSeat } from "@/lib/server/session";
+import { isTableSeatRequest, jsonError, loadRoomOr404, resolveSeat } from "@/lib/server/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,6 +15,12 @@ export async function GET(request: NextRequest, { params }: Params) {
   const { id } = await params;
   const room = await loadRoomOr404(id);
   if (!room) return jsonError("Room not found.", 404);
+
+  if (await isTableSeatRequest(request, room)) {
+    const touched = touchTableSeat(room);
+    await getRoomStore().save(touched, room.version);
+    return NextResponse.json(publicRoom(touched, null, Date.now(), true));
+  }
 
   const seat = await resolveSeat(request, room);
   if (seat !== null) {

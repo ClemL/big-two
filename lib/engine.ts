@@ -12,6 +12,8 @@ import { beats, identify, legalMoves } from "./combos.ts";
 import { roundDeltas } from "./scoring.ts";
 
 export const PLAYER_COUNT = 4;
+/** How many recent plays the state carries for the table display. */
+export const HISTORY_LIMIT = 8;
 export const DEFAULT_NAMES = ["You", "Ada", "Bruce", "Chan"] as const;
 
 export interface PlayerState {
@@ -38,6 +40,8 @@ export interface GameState {
   turn: number;
   /** Combination that must be beaten; null when the table is clear. */
   table: TablePlay | null;
+  /** Recent plays, oldest first, for the shared table display. */
+  history: TablePlay[];
   /** Player who owns the current pile and leads once everyone else passes. */
   leader: number;
   /** Players who have passed on the current trick. */
@@ -75,6 +79,7 @@ export function startRound(options: NewRoundOptions = {}): GameState {
     })),
     turn: starter,
     table: null,
+    history: [],
     leader: starter,
     passed: [false, false, false, false],
     openingPlay: true,
@@ -138,6 +143,7 @@ function clone(state: GameState): GameState {
     ...state,
     players: state.players.map((p) => ({ ...p, hand: p.hand.slice() })),
     passed: state.passed.slice(),
+    history: state.history.slice(),
     log: state.log.slice(),
     scores: state.scores.slice(),
   };
@@ -153,6 +159,9 @@ export function applyPlay(state: GameState, player: number, cards: readonly Card
   hand.hand = hand.hand.filter((c) => !ids.has(c.id));
 
   next.table = { player, combo };
+  // A short window is all the table display needs, and it keeps the room
+  // payload small enough to poll.
+  next.history = [...next.history, { player, combo }].slice(-HISTORY_LIMIT);
   next.leader = player;
   next.passed = [false, false, false, false];
   next.openingPlay = false;
@@ -189,6 +198,7 @@ export function applyPass(state: GameState, player: number): GameState {
   if (stillIn <= 1) {
     // Everybody folded to the pile owner: the table clears and they lead again.
     next.table = null;
+    next.history = [];
     next.passed = [false, false, false, false];
     next.turn = next.leader;
     next.log.push({

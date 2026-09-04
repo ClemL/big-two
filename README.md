@@ -116,6 +116,7 @@ contests instead.
 app/            Next.js App Router entry, global stylesheet, icon
 app/api/        Room routes (create, join, state, version, move)
 components/     TableView (shared layout), GameTable (single player), OnlineTable,
+                PocketView (phone), TableDisplay + TableSeatGate (tablet),
                 RoomLobby, CreateRoom, CardView, CardFace (SVG deck), RulesPanel,
                 Modal, BuildFooter
 lib/cards.ts    Deck, rank/suit ordering, seeded shuffle and deal
@@ -182,6 +183,9 @@ moves. Polling pauses when the tab is hidden and resumes on focus.
 | `GET /api/rooms/:id/version` | Cheap poll: version, turn, seat status |
 | `GET /api/rooms/:id/state` | Full state, redacted for the caller's seat |
 | `POST /api/rooms/:id/move` | Play, pass or start the next round |
+| `POST /api/rooms/:id/table` | Claim the shared table display |
+| `DELETE /api/rooms/:id/table` | Release it |
+| `POST /api/rooms/:id/control` | Table only: next round, restart match, adjust a score |
 
 Writes are compare-and-set on the room version. Serverless instances share no
 memory and requests interleave, so "read, decide, write" without a version check
@@ -205,6 +209,37 @@ A room is about 2 KB and expires after a week of silence. Four players polling
 the version endpoint every 3 seconds is roughly 80 requests a minute for the
 table.
 
+## The table display
+
+One device can act as the table itself — a tablet lying in the middle of the
+real one. Open `/room/<code>/table` on it and enter the same table password.
+
+It shows:
+
+* the current hand to beat, in large cards, animated in from the seat that
+  played it;
+* the last three plays before that, so a trick can be reconstructed after an
+  argument;
+* every seat's name, card count and running score;
+* which seat number sits where — the four panels are drawn at the four edges,
+  so the numbers double as a seating plan.
+
+It is also the only client that can run the match: deal the next round, restart
+the match with the chips back to zero, and adjust any seat's score by ±1 or ±5
+when something needs settling by hand. A phone calling those endpoints gets a
+403; the table holds its own token, exactly as a seat does.
+
+**The table never receives anybody's cards.** It is a screen the whole room can
+see, so `publicRoom()` withholds every hand from it, and a test asserts that.
+
+### Phones shrink while the table is running
+
+With a table display active, the shared state is already in front of everyone,
+so the player view drops to what a phone actually needs: your hand, your
+buttons, and one line naming what is on the table. The seats, scoreboard, pile
+and log all disappear. Release the table and the phones return to the full
+layout on their next poll.
+
 ## Changelog footer
 
 The footer carries the version, build stamp and short commit SHA, followed by the most recent
@@ -223,6 +258,11 @@ SHA comes from `VERCEL_GIT_COMMIT_SHA`.
 
 ## Presentation
 
+* **Cards fan out and overlap.** The hand is one non-wrapping row of large cards
+  sharing a negative margin, sized from `--card-w` / `--card-h` and
+  `--hand-overlap` on `:root`, so a context can resize the deck by setting three
+  variables. The overlap tightens on narrow screens so all 13 cards still fit a
+  390px phone without scrolling.
 * **Cards are SVG**, drawn from suit paths and pip layouts in `components/CardFace.tsx` — no image
   assets, crisp at any size, and the standard French-deck arrangement including rotated bottom-half
   pips and mirrored corner indices.

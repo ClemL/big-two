@@ -9,3 +9,7 @@
 2026-09-03T21:40:00Z - CI now runs the typecheck, the test suite and the build on every pull request.
 2026-09-03T21:40:00Z - New Competitive opponent: plans the hand into the fewest possible plays and protects that plan. Wins about 48% of rounds against the simpler styles.
 2026-09-03T22:30:00Z - Multiplayer: start a table at /play, share the room code, claim a seat with the table password. Seats nobody takes are played by the AI.
+2026-09-04T01:30:00Z - Cards are larger and the hand now fans out with overlap instead of wrapping, so a full 13-card hand fits a phone screen.
+2026-09-04T01:30:00Z - Table display: point a tablet at /room/<code>/table to use it as the table itself — hand to beat, last three plays, every score and card count, and which seat number sits where.
+2026-09-04T01:30:00Z - The table runs the match: deal the next round, restart the match, or adjust a seat's score by hand.
+2026-09-04T01:30:00Z - While a table display is running, phones show only your own hand and buttons.

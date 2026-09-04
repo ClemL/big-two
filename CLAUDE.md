@@ -33,6 +33,7 @@ client side, so a Vercel deployment is just `next build` plus static hosting.
 app/            App Router entry, global stylesheet, icon
 app/api/        Room routes (create, join, state, version, move)
 components/     TableView (shared layout), GameTable (single player), OnlineTable,
+                PocketView (phone), TableDisplay + TableSeatGate (tablet),
                 RoomLobby, CreateRoom, CardView, CardFace (SVG deck), RulesPanel,
                 Modal, BuildFooter
 lib/cards.ts    Deck, rank/suit ordering, seeded shuffle and deal
@@ -80,6 +81,9 @@ update `test/` and the in-app rules panel in the same commit.
 * **The deal seed never goes over the wire, and a client only ever gets its own cards.** The seed
   reproduces all four hands, so leaking it leaks the deal. `publicRoom()` is the only thing that
   should ever be serialized to a player, and a test asserts both properties.
+* **The table display is a public screen and never receives a hand.** It has its own token and its
+  own role: it holds no cards, and it is the only client allowed to call `/control`. A test asserts
+  both halves.
 * **A seat is identified by its token, not by the room password.** The password admits you to the
   room; the per-seat token says which seat you are. Collapsing the two lets anyone with the password
   move as anyone.
@@ -124,6 +128,10 @@ almost nowhere else.
   the viewer sits at the bottom. Change the layout there, not in one of the two tables.
 * The build footer reads `public/updates.txt` at runtime and fails silently if it is missing.
   Version and build stamp are inlined at build time by `next.config.mjs`.
+* Card size lives in three `:root` variables — `--card-w`, `--card-h`, `--hand-overlap`. The hand is
+  one non-wrapping overlapping row; a context that needs a different size sets the variables rather
+  than adding rules. Media queries that change them must come after the wider ones, since they share
+  specificity.
 * Cards are SVG drawn by `CardFace.tsx` on a 100x140 grid — no image assets. Suit shapes are authored
   in a 0..100 box and scaled at the point of use, so a new pip position is a coordinate, not a new
   asset. Court emblems inherit the suit colour from the parent group, which is why that group sets
