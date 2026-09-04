@@ -127,10 +127,12 @@ lib/ai.ts       Opponent policies
 lib/strategy.ts Exact minimum-plays hand decomposition
 lib/sound.ts    Web Audio sound effects
 lib/room.ts     Multiplayer room model: seats, intents, redaction
-lib/server/     Room storage (Upstash REST + memory), crypto, request helpers
+lib/server/     api (every endpoint), room storage (Upstash REST + memory),
+                crypto, rate limiting, HTTP helpers
 public/         updates.txt (changelog)
 bench/          Self-play tournament (npm run bench)
-test/           node:test unit tests, including 450 simulated self-play rounds
+test/           node:test unit tests: rules, engine, AI, room model, HTTP layer,
+                and 450 simulated self-play rounds
 ```
 
 The game engine is pure: `startRound`, `applyPlay` and `applyPass` return new
@@ -187,6 +189,26 @@ moves. Polling pauses when the tab is hidden and resumes on focus.
 | `DELETE /api/rooms/:id/table` | Release it |
 | `POST /api/rooms/:id/control` | Table only: next round, restart match, adjust a score |
 
+Every endpoint is a plain `Request` → `Response` function in `lib/server/api.ts`;
+`app/api/**` only adapts Next's route signature onto it. That keeps the rules
+about who may act and what is redacted in one place, and lets the whole HTTP
+layer be tested by calling a function — no server, no Playwright.
+
+### Rate limiting
+
+The password endpoints are throttled, because PBKDF2 makes each guess cost the
+server ~50ms and an unthrottled guesser burns function time as well as getting
+unlimited attempts. Limits are fixed-window counters in the same store:
+
+| Rule | Limit |
+| --- | --- |
+| Password attempts per caller, per room | 10 per 10 minutes |
+| Password attempts per room, all callers | 40 per 10 minutes |
+| Room creation per caller | 20 per hour |
+
+Rotating IPs still runs into the room-wide ceiling. Exhausted callers get a 429
+with `Retry-After`.
+
 Writes are compare-and-set on the room version. Serverless instances share no
 memory and requests interleave, so "read, decide, write" without a version check
 would silently drop one of two moves submitted at the same moment. On Upstash
@@ -239,6 +261,40 @@ so the player view drops to what a phone actually needs: your hand, your
 buttons, and one line naming what is on the table. The seats, scoreboard, pile
 and log all disappear. Release the table and the phones return to the full
 layout on their next poll.
+
+## Playing at a keyboard
+
+Cards are buttons, so Tab and Space work without help. On top of that:
+
+| Key | Action |
+| --- | --- |
+| ← / → | Move along your hand |
+| Space | Select or deselect the focused card |
+| Enter | Play the selection |
+| P | Pass |
+| H | Hint |
+| Esc | Clear the selection |
+
+Shortcuts are ignored while you are typing in a field, so the lobby still works
+normally.
+
+### Passing is automatic
+
+When your hand holds no legal reply there is no decision to make, so the game
+passes for you after a beat rather than asking you to confirm the inevitable.
+
+### The trick so far
+
+The three plays before the current one sit to the left of the pile, oldest
+first, and the strip slides across when a new play lands and the old pile joins
+it. The trick history clears when the table does. It is hidden on phones, which
+have no room for it — and unnecessary when a tablet is acting as the table.
+
+### Turn signals
+
+When it becomes your turn the phone chimes and vibrates, since a phone spends
+the game face down when a table display is running. The table display sounds its
+own cue and names the seat to play.
 
 ## Changelog footer
 

@@ -15,7 +15,8 @@ export type SoundName =
   | "clear"
   | "deal"
   | "win"
-  | "lose";
+  | "lose"
+  | "turn";
 
 const STORAGE_KEY = "bigtwo:muted";
 
@@ -105,6 +106,11 @@ const RECIPES: Record<SoundName, () => void> = {
     [523.25, 659.25, 783.99, 1046.5].forEach((f, i) =>
       tone(f, 0.22, { delay: i * 0.09, gain: 0.16 }),
     );
+  },
+  // Distinct from every other cue: this one has to cut through a room.
+  turn: () => {
+    tone(660, 0.14, { gain: 0.2 });
+    tone(990, 0.18, { delay: 0.11, gain: 0.18 });
   },
   lose: () => {
     [440, 392, 329.63, 261.63].forEach((f, i) => tone(f, 0.24, { delay: i * 0.1, gain: 0.13 }));

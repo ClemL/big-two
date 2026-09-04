@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CardView } from "@/components/CardView";
 import { Modal } from "@/components/Modal";
 import { comboName } from "@/lib/combos";
+import { useTableTurnSignal } from "@/components/hooks";
 import * as sound from "@/lib/sound";
 import type { PublicRoom } from "@/lib/room";
 
@@ -113,6 +114,9 @@ export function TableDisplay({
     [roomId, refresh],
   );
 
+  // The table is what the room listens to, so it calls the change of turn.
+  useTableTurnSignal(room.turn, room.finished);
+
   const table = room.table;
   // The plays before the current one, most recent first.
   const previous = room.history.slice(0, -1).slice(-3).reverse();
@@ -124,9 +128,13 @@ export function TableDisplay({
           <h1>Room {room.id}</h1>
           <span className="table-display__sub">
             Round {room.roundNumber} ·{" "}
-            {room.finished
-              ? `${room.seats[room.winner!].name} won`
-              : `${room.seats[room.turn].name} to play`}
+            {room.finished ? (
+              `${room.seats[room.winner!].name} won`
+            ) : (
+              <strong className="table-display__turn">
+                ▸ Seat {room.turn + 1} · {room.seats[room.turn].name} to play
+              </strong>
+            )}
           </span>
         </div>
         <div className="table-display__controls">

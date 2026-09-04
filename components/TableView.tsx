@@ -33,6 +33,12 @@ export interface ScoreRow {
   isYou: boolean;
 }
 
+export interface PreviousPlay {
+  key: string;
+  combo: Combo;
+  playerName: string;
+}
+
 export interface TableViewProps {
   subtitle: string;
   controls: ReactNode;
@@ -41,6 +47,8 @@ export interface TableViewProps {
   /** Exactly three, ordered left, top, right. */
   opponents: OpponentSeat[];
   pile: { combo: Combo; playerName: string; fromPosition: number } | null;
+  /** The plays before the current one, oldest first, shown beside the pile. */
+  previousPlays?: PreviousPlay[];
   clearTableLeader: string;
   status: string;
   message?: string | null;
@@ -64,6 +72,7 @@ export function TableView({
   roundLabel,
   opponents,
   pile,
+  previousPlays = [],
   clearTableLeader,
   status,
   message,
@@ -132,24 +141,43 @@ export function TableView({
         ))}
 
         <div className="pile">
-          {pile ? (
-            <>
-              <div className="pile__label">
-                {pile.playerName} · {comboName(pile.combo)}
-              </div>
-              {/* Keyed on the play so a new one remounts and replays the animation. */}
-              <div className="pile__cards" key={pile.combo.cards.map((c) => c.id).join("-")}>
-                {pile.combo.cards.map((card, i) => (
-                  <CardView key={card.id} card={card} index={i} from={pile.fromPosition} />
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="pile__empty">
-              Table is clear
-              <span>{clearTableLeader} leads</span>
+          {previousPlays.length > 0 ? (
+            /* Keyed on the newest entry so the whole strip slides across when a
+               play lands and the old pile joins the history. */
+            <div className="pile__history" key={previousPlays[previousPlays.length - 1].key}>
+              {previousPlays.map((play) => (
+                <div className="pile__history-entry" key={play.key}>
+                  <span className="pile__history-who">{play.playerName}</span>
+                  <div className="pile__history-cards">
+                    {play.combo.cards.map((card) => (
+                      <CardView key={card.id} card={card} />
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
-          )}
+          ) : null}
+
+          <div className="pile__current">
+            {pile ? (
+              <>
+                <div className="pile__label">
+                  {pile.playerName} · {comboName(pile.combo)}
+                </div>
+                {/* Keyed on the play so a new one remounts and replays the animation. */}
+                <div className="pile__cards" key={pile.combo.cards.map((c) => c.id).join("-")}>
+                  {pile.combo.cards.map((card, i) => (
+                    <CardView key={card.id} card={card} index={i} from={pile.fromPosition} />
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="pile__empty">
+                Table is clear
+                <span>{clearTableLeader} leads</span>
+              </div>
+            )}
+          </div>
         </div>
       </section>
 

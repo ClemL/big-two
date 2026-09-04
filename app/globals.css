@@ -296,10 +296,66 @@ body {
 .pile {
   grid-area: pile;
   display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+}
+
+.pile__current {
+  display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 10px;
+}
+
+/* The last few plays, oldest on the left, ending beside the live pile. */
+.pile__history {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 4px;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  animation: history-slide 0.4s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+@keyframes history-slide {
+  from {
+    transform: translateX(52px);
+    opacity: 0.35;
+  }
+}
+
+.pile__history-entry {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  opacity: 0.55;
+}
+
+.pile__history-entry:last-child {
+  opacity: 0.85;
+}
+
+.pile__history-who {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.pile__history-cards {
+  display: flex;
+}
+
+.pile__history-cards .card {
+  --card-w: 42px;
+  --card-h: 59px;
+}
+
+.pile__history-cards .card + .card {
+  margin-left: -15px;
 }
 
 .pile__label {
@@ -683,6 +739,11 @@ body {
     text-align: left;
   }
 
+  /* No room for the trick history beside the pile on a phone. */
+  .pile__history {
+    display: none;
+  }
+
   .table {
     grid-template-columns: 1fr 1fr;
     grid-template-areas:
@@ -980,6 +1041,11 @@ body {
 .table-display__sub {
   color: var(--muted);
   font-size: 13px;
+}
+
+.table-display__turn {
+  color: var(--accent);
+  font-size: 15px;
 }
 
 .table-display__controls {
