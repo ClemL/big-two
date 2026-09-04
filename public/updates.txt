@@ -8,3 +8,4 @@
 2026-09-03T20:15:00Z - Sound effects for dealing, playing, passing, clearing the table and winning a round, with a mute toggle that is remembered.
 2026-09-03T21:40:00Z - CI now runs the typecheck, the test suite and the build on every pull request.
 2026-09-03T21:40:00Z - New Competitive opponent: plans the hand into the fewest possible plays and protects that plan. Wins about 48% of rounds against the simpler styles.
+2026-09-03T22:30:00Z - Multiplayer: start a table at /play, share the room code, claim a seat with the table password. Seats nobody takes are played by the AI.

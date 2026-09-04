@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CardBack, CardView } from "@/components/CardView";
 import { Modal } from "@/components/Modal";
 import { RulesPanel } from "@/components/RulesPanel";
+import { RoundSummary, TableView, type OpponentSeat } from "@/components/TableView";
 import type { Card, SortMode } from "@/lib/cards";
 import { sortHand } from "@/lib/cards";
 import { comboName } from "@/lib/combos";
@@ -23,12 +23,6 @@ import {
 
 const HUMAN = 0;
 const AI_DELAY_MS = 750;
-/** Seat positions around the table for the three opponents. */
-const SEATS = [
-  { player: 1, className: "seat seat--left" },
-  { player: 2, className: "seat seat--top" },
-  { player: 3, className: "seat seat--right" },
-];
 
 export default function GameTable() {
   const [state, setState] = useState<GameState | null>(null);
@@ -98,7 +92,8 @@ export default function GameTable() {
     () => humanHand.filter((c) => selected.includes(c.id)),
     [humanHand, selected],
   );
-  const selectionProblem = state && selectedCards.length > 0 ? validatePlay(state, HUMAN, selectedCards) : null;
+  const selectionProblem =
+    state && selectedCards.length > 0 ? validatePlay(state, HUMAN, selectedCards) : null;
 
   const toggleCard = useCallback(
     (card: Card) => {
@@ -168,7 +163,7 @@ export default function GameTable() {
   }
 
   const table = state.table;
-  const statusLine = state.finished
+  const status = state.finished
     ? `${state.players[state.winner!].name} won round ${state.roundNumber}`
     : myTurn
       ? myMoves.length === 0
@@ -178,16 +173,27 @@ export default function GameTable() {
           : state.openingPlay
             ? "Your turn — lead the round with a play containing 3♦"
             : "Your turn — the table is clear, lead any legal shape"
-    : `${state.players[state.turn].name} is thinking…`;
+      : `${state.players[state.turn].name} is thinking…`;
+
+  const opponents: OpponentSeat[] = [1, 2, 3].map((index) => {
+    const player = state.players[index];
+    const badges: OpponentSeat["badges"] = [];
+    if (state.leader === index && table) badges.push({ label: "leads" });
+    if (state.passed[index]) badges.push({ label: "passed", muted: true });
+    return {
+      key: index,
+      name: player.name,
+      cards: player.hand.length,
+      isTurn: state.turn === index && !state.finished,
+      badges,
+    };
+  });
 
   return (
-    <main className="app">
-      <header className="topbar">
-        <div className="topbar__title">
-          <h1>Big Two</h1>
-          <span className="topbar__sub">Hong Kong rules · 鋤大弟</span>
-        </div>
-        <div className="topbar__controls">
+    <TableView
+      subtitle="Hong Kong rules · 鋤大弟"
+      controls={
+        <>
           <label className="field">
             <span>Opponents</span>
             <select value={aiStyle} onChange={(e) => setAiStyle(e.target.value as AiStyle)}>
@@ -209,6 +215,9 @@ export default function GameTable() {
           >
             New match
           </button>
+          <a className="btn btn--ghost" href="/play">
+            Play with friends
+          </a>
           <button
             type="button"
             className="btn btn--icon"
@@ -220,171 +229,99 @@ export default function GameTable() {
             {muted ? "🔇" : "🔊"}
           </button>
           <RulesPanel />
-        </div>
-      </header>
-
-      <section className="scoreboard" aria-label="Scores">
-        {state.players.map((p) => (
-          <div
-            key={p.index}
-            className={[
-              "scoreboard__row",
-              state.turn === p.index && !state.finished ? "is-active" : "",
-              state.winner === p.index ? "is-winner" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
+        </>
+      }
+      scoreboard={state.players.map((p) => ({
+        key: p.index,
+        name: p.name,
+        cards: p.hand.length,
+        chips: state.scores[p.index],
+        isActive: state.turn === p.index && !state.finished,
+        isWinner: state.winner === p.index,
+        isYou: false,
+      }))}
+      roundLabel={`Round ${state.roundNumber}`}
+      opponents={opponents}
+      pile={
+        table
+          ? {
+              combo: table.combo,
+              playerName: state.players[table.player].name,
+              fromPosition: table.player,
+            }
+          : null
+      }
+      clearTableLeader={state.players[state.leader].name}
+      status={status}
+      message={message || (selectedCards.length > 0 ? selectionProblem : null)}
+      hand={humanHand}
+      handKey={`${state.roundNumber}-${state.seed}`}
+      selected={selected}
+      canSelect={myTurn}
+      onToggleCard={toggleCard}
+      actions={
+        <>
+          <button type="button" className="btn btn--primary" onClick={play} disabled={!myTurn}>
+            Play
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={pass}
+            disabled={!myTurn || !canPass(state, HUMAN)}
           >
-            <span className="scoreboard__name">{p.name}</span>
-            <span className="scoreboard__cards">
-              {p.hand.length} card{p.hand.length === 1 ? "" : "s"}
-            </span>
-            <span className={`scoreboard__chips ${state.scores[p.index] < 0 ? "is-negative" : ""}`}>
-              {state.scores[p.index] > 0 ? `+${state.scores[p.index]}` : state.scores[p.index]}
-            </span>
-          </div>
-        ))}
-        <div className="scoreboard__round">Round {state.roundNumber}</div>
-      </section>
-
-      <section className="table">
-        {SEATS.map(({ player, className }) => {
-          const p = state.players[player];
-          const isTurn = state.turn === player && !state.finished;
-          return (
-            <div key={player} className={`${className} ${isTurn ? "is-turn" : ""}`}>
-              <div className="seat__name">
-                {p.name}
-                {state.leader === player && table ? <span className="seat__badge">leads</span> : null}
-                {state.passed[player] ? <span className="seat__badge seat__badge--muted">passed</span> : null}
-              </div>
-              <CardBack count={p.hand.length} />
-            </div>
-          );
-        })}
-
-        <div className="pile">
-          {table ? (
-            <>
-              <div className="pile__label">
-                {state.players[table.player].name} · {comboName(table.combo)}
-              </div>
-              {/* Keyed on the play so a new one remounts and replays the animation. */}
-              <div className="pile__cards" key={table.combo.cards.map((c) => c.id).join("-")}>
-                {table.combo.cards.map((c, i) => (
-                  <CardView key={c.id} card={c} index={i} from={table.player} />
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="pile__empty">
-              Table is clear
-              <span>{state.players[state.leader].name} leads</span>
-            </div>
-          )}
-        </div>
-      </section>
-
-      <section className="status" role="status">
-        <span>{statusLine}</span>
-        {message ? <span className="status__message">{message}</span> : null}
-        {!message && selectedCards.length > 0 && selectionProblem ? (
-          <span className="status__message">{selectionProblem}</span>
-        ) : null}
-      </section>
-
-      <section className="hand" aria-label="Your hand" key={`${state.roundNumber}-${state.seed}`}>
-        {humanHand.map((card, i) => (
-          <CardView
-            key={card.id}
-            card={card}
-            index={i}
-            selected={selected.includes(card.id)}
-            disabled={!myTurn}
-            onClick={toggleCard}
-          />
-        ))}
-      </section>
-
-      <section className="actions">
-        <button type="button" className="btn btn--primary" onClick={play} disabled={!myTurn}>
-          Play
-        </button>
-        <button
-          type="button"
-          className="btn"
-          onClick={pass}
-          disabled={!myTurn || !canPass(state, HUMAN)}
-        >
-          Pass
-        </button>
-        <button type="button" className="btn" onClick={hint} disabled={!myTurn}>
-          Hint
-        </button>
-        <button type="button" className="btn" onClick={() => setSelected([])} disabled={selected.length === 0}>
-          Clear
-        </button>
-        <button
-          type="button"
-          className="btn btn--ghost"
-          onClick={() => setSortMode((m) => (m === "rank" ? "suit" : "rank"))}
-        >
-          Sort: {sortMode === "rank" ? "rank" : "suit"}
-        </button>
-      </section>
-
-      <section className="log" aria-label="Play history">
-        {state.log
-          .slice(-6)
-          .reverse()
-          .map((entry, i) => (
-            <div key={`${state.log.length - i}`} className={`log__line log__line--${entry.kind}`}>
-              {entry.text}
-            </div>
-          ))}
-      </section>
-
-      {state.finished && state.lastDeltas ? (
-        <Modal title={`${state.players[state.winner!].name} won round ${state.roundNumber}`}>
-          <>
-            <table className="results">
-              <thead>
-                <tr>
-                  <th>Player</th>
-                  <th>Cards left</th>
-                  <th>Round</th>
-                  <th>Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {state.players.map((p) => (
-                  <tr key={p.index} className={p.index === state.winner ? "is-winner" : ""}>
-                    <td>{p.name}</td>
-                    <td>{p.hand.length}</td>
-                    <td className={state.lastDeltas![p.index] < 0 ? "is-negative" : ""}>
-                      {state.lastDeltas![p.index] > 0
-                        ? `+${state.lastDeltas![p.index]}`
-                        : state.lastDeltas![p.index]}
-                    </td>
-                    <td>{state.scores[p.index]}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <button
-              type="button"
-              className="btn btn--primary"
-              onClick={() => {
-                setState(nextRound(state));
-                setSelected([]);
-                setMessage("");
-              }}
-            >
-              Next round
-            </button>
-          </>
-        </Modal>
-      ) : null}
-    </main>
+            Pass
+          </button>
+          <button type="button" className="btn" onClick={hint} disabled={!myTurn}>
+            Hint
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => setSelected([])}
+            disabled={selected.length === 0}
+          >
+            Clear
+          </button>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => setSortMode((m) => (m === "rank" ? "suit" : "rank"))}
+          >
+            Sort: {sortMode === "rank" ? "rank" : "suit"}
+          </button>
+        </>
+      }
+      log={state.log}
+      overlay={
+        state.finished && state.lastDeltas ? (
+          <Modal title={`${state.players[state.winner!].name} won round ${state.roundNumber}`}>
+            <RoundSummary
+              rows={state.players.map((p) => ({
+                key: p.index,
+                name: p.name,
+                cards: p.hand.length,
+                delta: state.lastDeltas![p.index],
+                total: state.scores[p.index],
+                isWinner: p.index === state.winner,
+              }))}
+              action={
+                <button
+                  type="button"
+                  className="btn btn--primary"
+                  onClick={() => {
+                    setState(nextRound(state));
+                    setSelected([]);
+                    setMessage("");
+                  }}
+                >
+                  Next round
+                </button>
+              }
+            />
+          </Modal>
+        ) : null
+      }
+    />
   );
 }

@@ -31,7 +31,9 @@ client side, so a Vercel deployment is just `next build` plus static hosting.
 
 ```
 app/            App Router entry, global stylesheet, icon
-components/     GameTable (all interaction), CardView, CardFace (SVG deck), RulesPanel,
+app/api/        Room routes (create, join, state, version, move)
+components/     TableView (shared layout), GameTable (single player), OnlineTable,
+                RoomLobby, CreateRoom, CardView, CardFace (SVG deck), RulesPanel,
                 Modal, BuildFooter
 lib/cards.ts    Deck, rank/suit ordering, seeded shuffle and deal
 lib/combos.ts   Combination detection, comparison, legal move generation
@@ -40,6 +42,8 @@ lib/scoring.ts  Hong Kong penalty multipliers
 lib/ai.ts       Opponent policies
 lib/strategy.ts Exact minimum-plays hand decomposition
 lib/sound.ts    Web Audio sound effects
+lib/room.ts     Multiplayer room model: seats, intents, redaction
+lib/server/     Room storage (Upstash REST + memory), crypto, request helpers
 public/         updates.txt (changelog)
 bench/          Self-play tournament between styles (npm run bench)
 test/           node:test unit tests, including simulated self-play rounds
@@ -70,6 +74,17 @@ update `test/` and the in-app rules panel in the same commit.
   straights run over 3…A,2 with **no wrap-around**, so A-2-3-4-5 is not a straight. If you change
   either, change all three places.
 * **Four cards are not a playable shape.** Quads are only playable as a five-card hand.
+* **The multiplayer server is the only authority.** `lib/room.ts` re-checks every move with the same
+  `validatePlay` the client uses, and matches card ids against the seat's real hand. Never trust a
+  client-side legality check.
+* **The deal seed never goes over the wire, and a client only ever gets its own cards.** The seed
+  reproduces all four hands, so leaking it leaks the deal. `publicRoom()` is the only thing that
+  should ever be serialized to a player, and a test asserts both properties.
+* **A seat is identified by its token, not by the room password.** The password admits you to the
+  room; the per-seat token says which seat you are. Collapsing the two lets anyone with the password
+  move as anyone.
+* **Room writes are compare-and-set on the version.** Requests interleave across serverless
+  instances, so an unconditional write silently drops concurrent moves.
 
 ## Working on the code
 
@@ -104,6 +119,9 @@ almost nowhere else.
   because the player has to choose to continue).
 * Backdrop clicks close only when the click landed on the backdrop itself — clicks inside the panel
   bubble up to the same handler, and closing on those feels broken. The guard is in `Modal.tsx`.
+* `TableView` owns the table layout and holds no game logic; single player builds its props from a
+  local `GameState`, the online table from the redacted server view. Seats arrive already rotated so
+  the viewer sits at the bottom. Change the layout there, not in one of the two tables.
 * The build footer reads `public/updates.txt` at runtime and fails silently if it is missing.
   Version and build stamp are inlined at build time by `next.config.mjs`.
 * Cards are SVG drawn by `CardFace.tsx` on a 100x140 grid — no image assets. Suit shapes are authored
