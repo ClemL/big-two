@@ -5,6 +5,6 @@ export const dynamic = "force-dynamic";
 
 type Params = { params: Promise<{ id: string }> };
 
-export async function GET(_request: Request, { params }: Params) {
-  return versionEndpoint((await params).id);
+export async function GET(request: Request, { params }: Params) {
+  return versionEndpoint(request, (await params).id);
 }

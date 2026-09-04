@@ -97,7 +97,7 @@ test("creating a room validates the password and returns an id", async () => {
 
 test("an unknown room is a 404 everywhere", async () => {
   freshStore();
-  assert.equal((await versionEndpoint("ZZZZZZ")).status, 404);
+  assert.equal((await versionEndpoint(request("GET", "/x"), "ZZZZZZ")).status, 404);
   assert.equal((await stateEndpoint(request("GET", "/x"), "ZZZZZZ")).status, 404);
   assert.equal((await joinEndpoint(post("/x", { seat: 0, password: "x" }), "ZZZZZZ")).status, 404);
   assert.equal((await moveEndpoint(post("/x", { action: "pass" }), "ZZZZZZ")).status, 404);
@@ -155,7 +155,7 @@ test("the polled version endpoint carries no cards", async () => {
   freshStore();
   const roomId = await newRoom();
   await seatedClient(roomId, 0, "Kris");
-  const response = await versionEndpoint(roomId);
+  const response = await versionEndpoint(request("GET", "/x"), roomId);
   const text = await response.text();
   assert.equal(response.status, 200);
   assert.equal(text.includes('"hand"'), false);
@@ -336,4 +336,36 @@ test("room creation is rate limited", async () => {
     }
   }
   assert.ok(limited, "a caller cannot mint rooms without limit");
+});
+
+
+test("the version poll keeps a watching seat present", async () => {
+  freshStore();
+  const roomId = await newRoom();
+  const { who } = await seatedClient(roomId, 0, "Kris");
+
+  // Polling alone — with no state fetch, which is the case whenever nobody
+  // has moved — has to be enough to stay present.
+  const polled = await versionEndpoint(request("GET", "/x", undefined, who), roomId);
+  assert.equal(polled.status, 200);
+  const payload = (await polled.json()) as { seats: { automated: boolean }[] };
+  assert.equal(payload.seats[0].automated, false);
+  assert.equal(JSON.stringify(payload).includes('"hand"'), false, "the poll still carries no cards");
+});
+
+test("a seat left silent long enough is taken over, and polling prevents it", async () => {
+  const { SEAT_IDLE_MS, claimSeat, createRoom, seatIsAutomated, touchSeat } = await import(
+    "../lib/room.ts"
+  );
+  const base = createRoom({ id: "IDLE01", passwordHash: "h", salt: "s", seed: 1, now: 0 });
+  const claimed = claimSeat(base, 0, "token", "Kris", 0);
+  assert.ok(claimed.ok);
+
+  const later = SEAT_IDLE_MS + 1;
+  assert.equal(seatIsAutomated(claimed.room, 0, later), true, "silence hands the seat over");
+
+  // One poll inside the window is enough to keep it.
+  const kept = touchSeat(claimed.room, 0, SEAT_IDLE_MS - 1);
+  assert.equal(seatIsAutomated(kept, 0, later), false);
+  assert.equal(kept.version, claimed.room.version, "presence does not bump the version");
 });

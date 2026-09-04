@@ -5,7 +5,7 @@ import { CardView } from "@/components/CardView";
 import { Modal } from "@/components/Modal";
 import { comboName } from "@/lib/combos";
 import { previousPlays } from "@/lib/engine";
-import { useTableTurnSignal } from "@/components/hooks";
+import { useTableTurnSignal, useWakeLock } from "@/components/hooks";
 import * as sound from "@/lib/sound";
 import type { PublicRoom } from "@/lib/room";
 
@@ -117,6 +117,7 @@ export function TableDisplay({
 
   // The table is what the room listens to, so it calls the change of turn.
   useTableTurnSignal(room.turn, room.finished);
+  useWakeLock(true);
 
   const table = room.table;
   // The plays before the current one, most recent first. History outlives the

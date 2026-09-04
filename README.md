@@ -155,8 +155,11 @@ random 32-byte **seat token**, stored as an httpOnly cookie, and the server keep
 only its SHA-256 hash. Every move is authorised by that token, not the password.
 Passwords are stored as PBKDF2-SHA256 (100k iterations) with a per-room salt.
 
-A seat silent for three minutes is treated as away: the AI plays its turns and
-someone else may claim it.
+A seat silent for ten minutes is treated as away: the AI plays its turns and
+someone else may claim it. Presence is refreshed by the version poll, not only
+by a state fetch — a quiet table used to age everyone out while they sat
+watching it, and a phone that locks its screen stops polling entirely, so the
+window is deliberately generous.
 
 ### What the server keeps to itself
 
@@ -309,6 +312,27 @@ unnecessary when a tablet is acting as the table.
 
 A round opens with cards flying out from the middle of the table to the four
 seats before the hand fans in.
+
+### Phones and tablets
+
+* **The screen is held awake** while you are seated or acting as the table, via
+  the Wake Lock API. A sleeping tablet interrupts the game; a sleeping phone
+  also stops polling, which is what used to lose people their seat.
+* **The hand wraps to two rows on a phone.** A single fanned row of thirteen
+  leaves about 24px of each card exposed — half what a finger reliably hits, and
+  the centre of every card sits under the next one. Two rows of seven at a gentle
+  overlap give roughly 48px of target with all thirteen visible; verified at
+  13/13 cards toggling from a centre tap on a 390px screen.
+* **Touch handling**: `touch-action: manipulation` removes the double-tap-to-zoom
+  delay that fought tap-twice-to-play, tap highlights and long-press selection
+  are off, and `overscroll-behavior` stops a downward swipe pulling the page into
+  a refresh mid-game.
+* **Hover styles are behind `@media (hover: hover)`.** On a touchscreen `:hover`
+  latches after a tap, so a card you merely touched used to stay lifted as though
+  chosen.
+* **Safe-area insets** keep the controls clear of the notch and home indicator,
+  and inputs are 16px so iOS Safari does not zoom the page on focus and leave it
+  there.
 
 ### Turn signals
 
