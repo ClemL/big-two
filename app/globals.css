@@ -1026,6 +1026,67 @@ body {
   min-width: 180px;
 }
 
+/* Input plus its Shuffle button, kept on one line inside a stacked field. */
+.field__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  flex-wrap: wrap;
+}
+
+.field__row input {
+  flex: 1 1 160px;
+}
+
+.field__hint {
+  color: var(--muted);
+  font-size: 12px;
+  max-width: 42ch;
+}
+
+/* ---------- who else is at the table ---------- */
+
+.presence {
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  border: 1px solid transparent;
+}
+
+.presence p {
+  margin: 0;
+}
+
+.presence__line strong {
+  color: var(--ink);
+}
+
+.presence--alone {
+  background: rgba(0, 0, 0, 0.25);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--muted);
+}
+
+.presence--joined {
+  background: rgba(224, 182, 66, 0.14);
+  border-color: rgba(224, 182, 66, 0.5);
+  color: var(--ink);
+}
+
+.presence__share {
+  margin-top: 4px;
+  color: var(--muted);
+}
+
+.presence__share code {
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 .field input:focus-visible,
 .field select:focus-visible {
   outline: 2px solid var(--accent);

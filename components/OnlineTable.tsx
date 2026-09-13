@@ -43,12 +43,19 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
   const [muted, setMuted] = useState(false);
   const seenLogEntries = useRef(initial.log.length);
   const dealtRound = useRef(initial.roundNumber);
+  const [arrival, setArrival] = useState<string>("");
+  // Resolved after mount: window.location is not there for the server render.
+  const [origin, setOrigin] = useState("");
 
   const seat = room.seat;
   const myHand = useMemo(() => {
     const hand = seat === null ? [] : (room.seats[seat].hand ?? []);
     return sortHand(hand, sortMode);
   }, [room, seat, sortMode]);
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
 
   useEffect(() => {
     setMuted(sound.loadMutePreference());
@@ -238,6 +245,48 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
 
   const me = seat ?? 0;
   const seatName = (index: number) => room.seats[index].name;
+  const namesRef = useRef<string[]>(room.seats.map((s) => s.name));
+  namesRef.current = room.seats.map((s) => s.name);
+
+  // A seat only counts as somebody else when a person is behind it and still
+  // present; `automated` already folds in the idle window. Keyed on a string so
+  // the identity survives a poll that changed nothing — the effect below must
+  // fire on an actual arrival, not on every refetch.
+  const humanKey = room.seats
+    .filter((s) => s.claimed && !s.automated)
+    .map((s) => s.index)
+    .join(",");
+  const humanSeats = useMemo(
+    () => (humanKey === "" ? [] : humanKey.split(",").map(Number)),
+    [humanKey],
+  );
+  const others = humanSeats.filter((index) => index !== seat);
+  const alone = seat !== null && others.length === 0;
+
+  // Someone arriving mid-match is easy to miss: their seat simply stops saying
+  // "AI". Call it out when the set of people grows.
+  const knownHumans = useRef<number[] | null>(null);
+  useEffect(() => {
+    const previous = knownHumans.current;
+    knownHumans.current = humanSeats;
+    if (previous === null) return;
+    const fresh = humanSeats.filter((index) => index !== seat && !previous.includes(index));
+    if (fresh.length === 0) return;
+    setArrival(
+      fresh.length === 1
+        ? `${namesRef.current[fresh[0]]} sat down and took over that seat.`
+        : `${fresh.length} players sat down.`,
+    );
+  }, [humanSeats, seat]);
+
+  // Expiry hangs off the message, not off the poll: tying it to the effect
+  // above let a refetch mid-countdown either cut the notice short or strand it
+  // on screen, depending on which landed first.
+  useEffect(() => {
+    if (!arrival) return;
+    const timer = setTimeout(() => setArrival(""), 8000);
+    return () => clearTimeout(timer);
+  }, [arrival]);
 
   const status = room.finished
     ? `${seatName(room.winner!)} won round ${room.roundNumber}`
@@ -353,8 +402,31 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
     );
   }
 
+
+  const shareLink = `${origin}/room/${room.id}`;
+
+  const banner =
+    arrival || alone ? (
+      <section className={`presence ${alone ? "presence--alone" : "presence--joined"}`} role="status">
+        {arrival ? (
+          <p className="presence__line">{arrival}</p>
+        ) : (
+          <>
+            <p className="presence__line">
+              <strong>You are the only one here.</strong> The AI is playing the other three seats, so
+              carry on — anyone who turns up takes over a seat mid-match.
+            </p>
+            <p className="presence__share">
+              Send them <code>{shareLink}</code>
+            </p>
+          </>
+        )}
+      </section>
+    ) : null;
+
   return (
     <TableView
+      banner={banner}
       subtitle={`Room ${room.id} · ${seat === null ? "watching" : `you are ${seatName(seat)}`}`}
       controls={
         <>

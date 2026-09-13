@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AI_STYLE_LABEL, type AiStyle } from "@/lib/ai";
+import { suggestPassword } from "@/lib/names";
 
 /** Start a table, or hop into one someone else started. */
 export function CreateRoom() {
@@ -10,6 +11,12 @@ export function CreateRoom() {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  // Suggested after mount, not during render: /play is prerendered, so a value
+  // chosen at render time would differ between the server and client passes.
+  useEffect(() => {
+    setPassword((current) => (current === "" ? suggestPassword() : current));
+  }, []);
 
   const create = useCallback(async () => {
     setBusy(true);
@@ -44,12 +51,28 @@ export function CreateRoom() {
           <h2>Start a table</h2>
           <label className="field field--stacked">
             <span>Table password</span>
-            <input
-              type="password"
-              value={password}
-              placeholder="at least 3 characters"
-              onChange={(e) => setPassword(e.target.value)}
-            />
+            <div className="field__row">
+              <input
+                type="text"
+                value={password}
+                placeholder="at least 3 characters"
+                autoComplete="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <button
+                type="button"
+                className="btn btn--ghost"
+                onClick={() => setPassword((current) => suggestPassword(current))}
+                title="Suggest another word"
+              >
+                Shuffle
+              </button>
+            </div>
+            <span className="field__hint">
+              Shown in the clear so you can read it out. Anyone with it can take a seat.
+            </span>
           </label>
           <label className="field field--stacked">
             <span>Empty seats play as</span>

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { OnlineTable } from "@/components/OnlineTable";
 import type { PublicRoom } from "@/lib/room";
+import { suggestName } from "@/lib/names";
 
 /**
  * Seat picking, then the table. No accounts: the room password gets you in,
@@ -30,6 +31,11 @@ export function RoomLobby({ roomId }: { roomId: string }) {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // After mount, so the suggestion does not differ between render passes.
+  useEffect(() => {
+    setName((current) => (current === "" ? suggestName() : current));
+  }, []);
 
   // Keep the seat list fresh while someone is deciding where to sit.
   useEffect(() => {
@@ -127,15 +133,18 @@ export function RoomLobby({ roomId }: { roomId: string }) {
           <input
             value={name}
             maxLength={16}
-            placeholder="Kris"
+            placeholder="Pikachu"
             onChange={(e) => setName(e.target.value)}
           />
         </label>
         <label className="field field--stacked">
           <span>Table password</span>
           <input
-            type="password"
+            type="text"
             value={password}
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") void join();
