@@ -53,6 +53,8 @@ export interface TableViewProps {
   /** The plays before the current one, oldest first, shown beside the pile. */
   previousPlays?: PreviousPlay[];
   clearTableLeader: string;
+  /** Sits above the table: who else is here, and anything waiting on them. */
+  banner?: ReactNode;
   status: string;
   message?: string | null;
   hand: Card[];
@@ -79,6 +81,7 @@ export function TableView({
   pile,
   previousPlays = [],
   clearTableLeader,
+  banner,
   status,
   message,
   hand,
@@ -127,6 +130,8 @@ export function TableView({
         ))}
         <div className="scoreboard__round">{roundLabel}</div>
       </section>
+
+      {banner}
 
       <section className="table">
         <DealAnimation key={`deal-${handKey}`} />

@@ -32,3 +32,6 @@
 2026-09-04T05:10:00Z - Touch handling: no zoom delay on a double tap, no grey tap flash, no long-press selection, and no pull-to-refresh mid-game.
 2026-09-04T05:10:00Z - Hover styles no longer stick to cards after you tap them on a touchscreen.
 2026-09-04T05:10:00Z - Controls clear the notch and home indicator, and tapping a field no longer zooms the page on iOS.
+2026-09-13T01:30:00Z - The table password is now shown in the clear and starts as a suggested three-letter word, with a Shuffle button for another.
+2026-09-13T01:30:00Z - Your name starts as a random Gen 1 Pokemon instead of an empty box.
+2026-09-13T01:30:00Z - Sitting alone now says so, with the link to send round; when someone takes a seat mid-match the table tells you.
