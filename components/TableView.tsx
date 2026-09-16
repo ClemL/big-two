@@ -3,10 +3,13 @@
 import type { ReactNode } from "react";
 import { useLingering } from "@/components/hooks";
 import { CardBack, CardView } from "@/components/CardView";
+import { CardCount } from "@/components/CardCount";
+import { HandView } from "@/components/HandView";
 import type { Card } from "@/lib/cards";
 import type { Combo } from "@/lib/combos";
 import { comboName } from "@/lib/combos";
 import type { LogEntry } from "@/lib/engine";
+import type { HandLayout } from "@/lib/handSettings";
 
 /**
  * The table layout, with no game logic in it.
@@ -63,6 +66,7 @@ export interface TableViewProps {
   selected: string[];
   /** Cards that cannot take part in any legal play right now. */
   dimmed?: string[];
+  handLayout?: HandLayout;
   canSelect: boolean;
   onToggleCard: (card: Card) => void;
   actions: ReactNode;
@@ -88,6 +92,7 @@ export function TableView({
   handKey,
   selected,
   dimmed = [],
+  handLayout = "fan",
   canSelect,
   onToggleCard,
   actions,
@@ -121,6 +126,7 @@ export function TableView({
               {row.isYou ? <span className="scoreboard__you"> (you)</span> : null}
             </span>
             <span className="scoreboard__cards">
+              <CardCount count={row.cards} label={false} />
               {row.cards} card{row.cards === 1 ? "" : "s"}
             </span>
             <span className={`scoreboard__chips ${row.chips < 0 ? "is-negative" : ""}`}>
@@ -183,19 +189,15 @@ export function TableView({
         {message ? <span className="status__message">{message}</span> : null}
       </section>
 
-      <section className="hand" aria-label="Your hand" key={handKey}>
-        {hand.map((card, i) => (
-          <CardView
-            key={card.id}
-            card={card}
-            index={i}
-            selected={selected.includes(card.id)}
-            dimmed={dimmed.includes(card.id)}
-            disabled={!canSelect}
-            onClick={onToggleCard}
-          />
-        ))}
-      </section>
+      <HandView
+        hand={hand}
+        layout={handLayout}
+        handKey={handKey}
+        selected={selected}
+        dimmed={dimmed}
+        canSelect={canSelect}
+        onToggleCard={onToggleCard}
+      />
 
       <section className="actions">{actions}</section>
 

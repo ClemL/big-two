@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as sound from "@/lib/sound";
 import { suggestPassword } from "@/lib/names";
+import { HAND_LAYOUT_KEY, readHandLayout, type HandLayout } from "@/lib/handSettings";
 import type { AiStyle } from "@/lib/ai";
 
 /**
@@ -265,4 +266,35 @@ export function useExpressTable(): {
   }, []);
 
   return { start, busy, error };
+}
+
+
+/**
+ * The player's hand layout, remembered on their own device.
+ *
+ * Read after mount rather than during render: the server pass has no
+ * localStorage, and a layout that differed between the two would rearrange the
+ * hand on hydration.
+ */
+export function useHandLayout(): [HandLayout, (next: HandLayout) => void] {
+  const [layout, setLayout] = useState<HandLayout>("fan");
+
+  useEffect(() => {
+    try {
+      setLayout(readHandLayout(localStorage.getItem(HAND_LAYOUT_KEY)));
+    } catch {
+      // Storage can be refused; the fan is a perfectly good default.
+    }
+  }, []);
+
+  const choose = useCallback((next: HandLayout) => {
+    setLayout(next);
+    try {
+      localStorage.setItem(HAND_LAYOUT_KEY, next);
+    } catch {
+      // Applies for this session even when it cannot be persisted.
+    }
+  }, []);
+
+  return [layout, choose];
 }
