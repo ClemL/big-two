@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as sound from "@/lib/sound";
+import { suggestPassword } from "@/lib/names";
+import type { AiStyle } from "@/lib/ai";
 
 /**
  * Alert a player that it is their turn.
@@ -203,4 +205,64 @@ export function useWakeLock(active: boolean): void {
       void sentinel?.release().catch(() => {});
     };
   }, [active]);
+}
+
+
+/**
+ * One press from nothing to a table running on this device.
+ *
+ * Makes the room, claims the table seat with the password it generated, and
+ * goes to the display. Nothing is dealt on arrival — the table opens in its
+ * lobby showing a QR code per seat, and waits for Start game.
+ *
+ * The password is stashed for the display to show, because the server only
+ * keeps its PBKDF2 hash and cannot hand it back.
+ */
+export function useExpressTable(): {
+  start: (options?: { password?: string; aiStyle?: AiStyle }) => Promise<void>;
+  busy: boolean;
+  error: string;
+} {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const start = useCallback(async (options: { password?: string; aiStyle?: AiStyle } = {}) => {
+    setBusy(true);
+    setError("");
+    try {
+      const chosen = options.password ?? "";
+      const word = chosen.length >= 3 ? chosen : suggestPassword();
+      const created = await fetch("/api/rooms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: word, aiStyle: options.aiStyle ?? "weakest" }),
+      });
+      const body = (await created.json().catch(() => ({}))) as { id?: string; error?: string };
+      if (!created.ok || !body.id) {
+        setError(body.error ?? "Could not start a table.");
+        return;
+      }
+      const claimed = await fetch(`/api/rooms/${body.id}/table`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: word }),
+      });
+      if (!claimed.ok) {
+        // The room exists, so send them to it rather than losing the work.
+        setError("The table was made but this device could not claim it.");
+        window.location.href = `/room/${body.id}`;
+        return;
+      }
+      try {
+        sessionStorage.setItem(`bigtwo_pw_${body.id}`, word);
+      } catch {
+        // Without storage the table simply shows no password label.
+      }
+      window.location.href = `/room/${body.id}/table`;
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  return { start, busy, error };
 }
