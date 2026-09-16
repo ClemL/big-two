@@ -271,6 +271,7 @@ export type TableIntent =
   | { kind: "startMatch"; botNames?: string[] }
   | { kind: "nextRound" }
   | { kind: "resetMatch"; inviteCodes?: string[] }
+  | { kind: "setAiStyle"; aiStyle: AiStyle }
   | { kind: "adjustScore"; seat: number; delta: number };
 
 export function applyTableIntent(
@@ -283,6 +284,13 @@ export function applyTableIntent(
 
   if (intent.kind === "startMatch") {
     return startMatch(touched, now, rng, undefined, intent.botNames);
+  }
+
+  if (intent.kind === "setAiStyle") {
+    // Takes effect from the next AI turn; the hands already dealt stand, so
+    // changing this mid-round retunes the opponents without resetting play.
+    const next = { ...touched, aiStyle: intent.aiStyle };
+    return { ok: true, room: bump(advanceAutomatedSeats(next, now, rng), now) };
   }
 
   if (intent.kind === "nextRound") {

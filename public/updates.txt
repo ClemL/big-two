@@ -44,3 +44,7 @@
 2026-09-16T02:10:00Z - The AI opponents are now called Mechanical Pikachu and friends, a different set each match.
 2026-09-16T02:10:00Z - The table display shows the last few plays in the middle beside the cards on the table, instead of in a strip along the bottom.
 2026-09-16T02:10:00Z - The table display runs a match clock, labels each seat's score, and draws the played cards larger.
+2026-09-16T03:00:00Z - The table display has a Display menu: five themes, seats on the edges or in the corners, text size, spacing and QR code size, all remembered on that device.
+2026-09-16T03:00:00Z - Opponent skill can be changed from the table mid-match, without resetting the round.
+2026-09-16T03:00:00Z - Cards played now fly into the middle of the table display from the seat that played them, as they already did in the single-player game.
+2026-09-16T03:00:00Z - Each seat on the table display shows its hand as a fan of card backs, so you can see who is close to going out.

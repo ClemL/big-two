@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CardView } from "@/components/CardView";
+import { CardBack, CardView } from "@/components/CardView";
 import { QrCode } from "@/components/QrCode";
 import { Modal } from "@/components/Modal";
 import { comboName } from "@/lib/combos";
@@ -9,6 +9,20 @@ import { previousPlays } from "@/lib/engine";
 import { useTableTurnSignal, useWakeLock } from "@/components/hooks";
 import * as sound from "@/lib/sound";
 import type { PublicRoom } from "@/lib/room";
+import { AI_STYLE_LABEL, type AiStyle } from "@/lib/ai";
+import {
+  DENSITY_LABEL,
+  FONT_SCALE_RANGE,
+  LAYOUT_LABEL,
+  QR_SCALE_RANGE,
+  TABLE_SETTINGS_KEY,
+  THEME_LABEL,
+  readTableSettings,
+  type TableDensity,
+  type TableLayout,
+  type TableSettings,
+  type TableTheme,
+} from "@/lib/tableSettings";
 
 /**
  * The shared table: a tablet in the middle of the real table.
@@ -42,8 +56,32 @@ export function TableDisplay({
   const [origin, setOrigin] = useState("");
 
   const [showPassword, setShowPassword] = useState(true);
+  const [settings, setSettings] = useState<TableSettings>(() => readTableSettings(null));
+  const [showSettings, setShowSettings] = useState(false);
   const [password, setPassword] = useState("");
   const [now, setNow] = useState(0);
+
+  // Read after mount: the server render has no localStorage, and settings that
+  // differed between the two passes would flash the default theme on every load.
+  useEffect(() => {
+    try {
+      setSettings(readTableSettings(localStorage.getItem(TABLE_SETTINGS_KEY)));
+    } catch {
+      // Storage can be refused; the defaults are a perfectly good table.
+    }
+  }, []);
+
+  const update = useCallback((patch: Partial<TableSettings>) => {
+    setSettings((current) => {
+      const next = { ...current, ...patch };
+      try {
+        localStorage.setItem(TABLE_SETTINGS_KEY, JSON.stringify(next));
+      } catch {
+        // A tablet that cannot persist still applies the change for this run.
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     setOrigin(window.location.origin);
@@ -180,7 +218,16 @@ export function TableDisplay({
   const previous = previousPlays(room.history, table).slice().reverse();
 
   return (
-    <main className="table-display">
+    <main
+      className={`table-display table-display--${settings.density} table-display--${settings.layout}`}
+      data-table-theme={settings.theme}
+      style={
+        {
+          "--table-font": settings.fontScale,
+          "--qr-scale": settings.qrScale,
+        } as React.CSSProperties
+      }
+    >
       <header className="table-display__bar">
         <div>
           <h1>Room {room.id}</h1>
@@ -227,6 +274,14 @@ export function TableDisplay({
             aria-pressed={showCodes}
           >
             {showCodes ? "Hide codes" : "Show codes"}
+          </button>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => setShowSettings(true)}
+            aria-haspopup="dialog"
+          >
+            Display
           </button>
           <button
             type="button"
@@ -291,9 +346,14 @@ export function TableDisplay({
                 <span className="seat__badge">leads</span>
               ) : null}
             </div>
+            {/* A fan of backs reads as "how far behind is that seat" at a
+                glance, which a number never does across a table. */}
+            {waiting ? null : (
+              <div className="table-seat__fan">
+                <CardBack count={seat.cards} />
+              </div>
+            )}
             <div className="table-seat__stats">
-              {/* No card count before the deal — `startMatch` reshuffles, so the
-                  pre-start hand sizes describe cards nobody has been given. */}
               <span className="table-seat__cards">
                 {waiting ? (seat.claimed ? "ready" : "waiting") : `${seat.cards} card${seat.cards === 1 ? "" : "s"}`}
               </span>
@@ -383,6 +443,97 @@ export function TableDisplay({
         </div>
         </div>
       </div>
+
+      {showSettings ? (
+        <Modal title="Display and opponents" onClose={() => setShowSettings(false)}>
+          <div className="table-options">
+            <label className="field field--stacked">
+              <span>Theme</span>
+              <select
+                value={settings.theme}
+                onChange={(e) => update({ theme: e.target.value as TableTheme })}
+              >
+                {(Object.keys(THEME_LABEL) as TableTheme[]).map((key) => (
+                  <option key={key} value={key}>
+                    {THEME_LABEL[key]}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field field--stacked">
+              <span>Seats</span>
+              <select
+                value={settings.layout}
+                onChange={(e) => update({ layout: e.target.value as TableLayout })}
+              >
+                {(Object.keys(LAYOUT_LABEL) as TableLayout[]).map((key) => (
+                  <option key={key} value={key}>
+                    {LAYOUT_LABEL[key]}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field field--stacked">
+              <span>Spacing</span>
+              <select
+                value={settings.density}
+                onChange={(e) => update({ density: e.target.value as TableDensity })}
+              >
+                {(Object.keys(DENSITY_LABEL) as TableDensity[]).map((key) => (
+                  <option key={key} value={key}>
+                    {DENSITY_LABEL[key]}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field field--stacked">
+              <span>Text size · {Math.round(settings.fontScale * 100)}%</span>
+              <input
+                type="range"
+                min={FONT_SCALE_RANGE.min}
+                max={FONT_SCALE_RANGE.max}
+                step={FONT_SCALE_RANGE.step}
+                value={settings.fontScale}
+                onChange={(e) => update({ fontScale: Number(e.target.value) })}
+              />
+            </label>
+
+            <label className="field field--stacked">
+              <span>QR code size · {Math.round(settings.qrScale * 100)}%</span>
+              <input
+                type="range"
+                min={QR_SCALE_RANGE.min}
+                max={QR_SCALE_RANGE.max}
+                step={QR_SCALE_RANGE.step}
+                value={settings.qrScale}
+                onChange={(e) => update({ qrScale: Number(e.target.value) })}
+              />
+            </label>
+
+            <label className="field field--stacked">
+              <span>Opponent skill</span>
+              <select
+                value={room.aiStyle}
+                disabled={busy}
+                onChange={(e) => void control({ action: "setAiStyle", aiStyle: e.target.value })}
+              >
+                {(Object.keys(AI_STYLE_LABEL) as AiStyle[]).map((key) => (
+                  <option key={key} value={key}>
+                    {AI_STYLE_LABEL[key]}
+                  </option>
+                ))}
+              </select>
+              <span className="field__hint">
+                Shared by the table, unlike the rest here. It applies from the next AI turn, so the
+                round in progress carries on with the hands already dealt.
+              </span>
+            </label>
+          </div>
+        </Modal>
+      ) : null}
 
       {room.finished && room.lastDeltas ? (
         <Modal title={`${room.seats[room.winner!].name} won round ${room.roundNumber}`}>

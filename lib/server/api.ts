@@ -342,6 +342,7 @@ function parseTableIntent(body: {
   action?: unknown;
   seat?: unknown;
   delta?: unknown;
+  aiStyle?: unknown;
 }): TableIntent | null {
   if (body.action === "nextRound") return { kind: "nextRound" };
   if (body.action === "startMatch") {
@@ -350,6 +351,10 @@ function parseTableIntent(body: {
     return { kind: "startMatch", botNames: mechanicalNames(SEAT_COUNT) };
   }
   if (body.action === "resetMatch") return { kind: "resetMatch" };
+  if (body.action === "setAiStyle") {
+    if (!AI_STYLES.includes(body.aiStyle as AiStyle)) return null;
+    return { kind: "setAiStyle", aiStyle: body.aiStyle as AiStyle };
+  }
   if (body.action === "adjustScore") {
     if (typeof body.seat !== "number" || typeof body.delta !== "number") return null;
     return { kind: "adjustScore", seat: body.seat, delta: body.delta };
