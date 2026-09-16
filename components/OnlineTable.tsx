@@ -10,6 +10,7 @@ import {
   useAutoPass,
   useDoubleTap,
   useGameKeys,
+  useHandLayout,
   useTurnSignal,
   useWakeLock,
 } from "@/components/hooks";
@@ -19,6 +20,7 @@ import { comboName, identify, legalMoves } from "@/lib/combos";
 import { previousPlays } from "@/lib/engine";
 import * as sound from "@/lib/sound";
 import type { PublicRoom } from "@/lib/room";
+import { HAND_LAYOUT_LABEL, type HandLayout } from "@/lib/handSettings";
 
 /** How often the tiny version endpoint is polled while the tab is visible. */
 const POLL_MS = 3000;
@@ -44,6 +46,7 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
   const seenLogEntries = useRef(initial.log.length);
   const dealtRound = useRef(initial.roundNumber);
   const [arrival, setArrival] = useState<string>("");
+  const [handLayout, setHandLayout] = useHandLayout();
   // Resolved after mount: window.location is not there for the server render.
   const [origin, setOrigin] = useState("");
 
@@ -405,6 +408,16 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
         status={status}
         message={message}
         toBeat={room.table?.combo ?? null}
+        others={[1, 2, 3].map((offset) => {
+          const index = (me + offset) % 4;
+          return {
+            key: index,
+            name: room.seats[index].name,
+            cards: room.seats[index].cards,
+            isTurn: room.turn === index && !room.finished,
+          };
+        })}
+        layout={handLayout}
         hand={myHand}
         handKey={`${room.id}-${room.roundNumber}`}
         selected={selected}
@@ -463,9 +476,20 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
   return (
     <TableView
       banner={banner}
+      handLayout={handLayout}
       subtitle={`Room ${room.id} · ${seat === null ? "watching" : `you are ${seatName(seat)}`}`}
       controls={
         <>
+          <label className="field">
+            <span>Hand</span>
+            <select value={handLayout} onChange={(e) => setHandLayout(e.target.value as HandLayout)}>
+              {(Object.keys(HAND_LAYOUT_LABEL) as HandLayout[]).map((key) => (
+                <option key={key} value={key}>
+                  {HAND_LAYOUT_LABEL[key]}
+                </option>
+              ))}
+            </select>
+          </label>
           <button type="button" className="btn btn--ghost" onClick={onLeave}>
             Leave seat
           </button>

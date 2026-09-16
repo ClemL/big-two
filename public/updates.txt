@@ -50,3 +50,7 @@
 2026-09-16T03:00:00Z - Each seat on the table display shows its hand as a fan of card backs, so you can see who is close to going out.
 2026-09-16T05:00:00Z - Opening the game no longer deals a round at you: it now waits on a Play button, so you pick your opponents first.
 2026-09-16T05:00:00Z - A Table mode button on the front page turns this device into the table in one press, without going through Play with friends.
+2026-09-16T12:00:00Z - Your hand can now be laid out as a fan, an arc, or grouped into the fewest plays that would empty it. The choice is remembered on your device.
+2026-09-16T12:00:00Z - Every player's remaining cards now show as a row of ticks that shortens as they play, turning amber near the end and red on the last card.
+2026-09-16T12:00:00Z - On a phone with a table display running, the other players' remaining cards are now listed above your hand.
+2026-09-16T12:00:00Z - Corner seats give the middle of the table more room: larger played cards and twice as much trick history.

@@ -599,6 +599,143 @@ body {
   margin-left: var(--hand-overlap);
 }
 
+/* ---------- alternative hand shapes ---------- */
+
+/*
+ * Arc. The pivot sits well below the card so a small rotation swings the top
+ * corner a long way and the bottom edges stay close together — the same
+ * geometry as holding a real hand.
+ */
+.hand--arc {
+  align-items: flex-end;
+  /*
+   * The flat row clips to scroll sideways; an arc cannot. Rotation swings the
+   * end cards past the row's edges, and the lifted card past its top, so this
+   * one lets them out and pays for the room with padding instead.
+   */
+  overflow: visible;
+  flex-wrap: nowrap;
+  padding: 40px 34px 14px;
+}
+
+.hand-arc__slot {
+  display: flex;
+  flex: none;
+  transform: rotate(var(--arc, 0deg));
+  transform-origin: 50% 190%;
+}
+
+.hand--arc .hand-arc__slot + .hand-arc__slot {
+  margin-left: var(--hand-overlap);
+}
+
+/*
+ * Grouped. Each group is one play, so the gap between groups has to read as
+ * larger than the overlap inside one — that spacing is the whole message.
+ */
+.hand--grouped {
+  flex-wrap: wrap;
+  gap: 18px;
+  justify-content: center;
+  overflow-x: visible;
+}
+
+.hand-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.hand-group__cards {
+  display: flex;
+}
+
+.hand-group__cards .card + .card {
+  margin-left: var(--hand-overlap);
+}
+
+.hand-group__tag {
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+/* ---------- cards-left indicator ---------- */
+
+.count {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.count__ticks {
+  display: inline-flex;
+  gap: 1.5px;
+}
+
+.count__tick {
+  width: 3px;
+  height: 11px;
+  border-radius: 1px;
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.count__tick.is-held {
+  background: var(--muted);
+}
+
+.count__n {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  min-width: 1.2em;
+}
+
+/* The last few cards are when the table has to react, so they say so. */
+.count--warning .count__tick.is-held { background: var(--accent); }
+.count--warning .count__n { color: var(--accent); }
+.count--critical .count__tick.is-held { background: var(--danger); }
+.count--critical .count__n { color: var(--danger); font-weight: 700; }
+
+.scoreboard__cards .count {
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* ---------- who else is still holding cards, on a phone ---------- */
+
+.pocket__others {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding: 6px 2px 2px;
+}
+
+.pocket__other {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.pocket__other.is-turn {
+  background: rgba(224, 182, 66, 0.16);
+  color: var(--ink);
+}
+
+.pocket__other-name {
+  max-width: 11ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /*
  * Deliberately no z-index on the chosen card. Raising it above its neighbours
  * also raises its hit area over theirs, and with the hand fanned tight on a
@@ -1165,6 +1302,23 @@ body {
     padding-right: 0;
     overflow-x: visible;
   }
+
+  /*
+   * Wrapping an arc onto two rows is not an arc, so it stays one row — which
+   * means thirteen cards have to fit 390px on their own. The flat row escapes
+   * this by wrapping; the arc pays for it in overlap, which is the trade you
+   * accept by choosing this shape on a phone.
+   */
+  .hand--arc {
+    --card-w: 50px;
+    --card-h: 70px;
+    flex-wrap: nowrap;
+    padding: 26px 14px 8px;
+  }
+
+  .hand--arc .hand-arc__slot + .hand-arc__slot {
+    margin-left: -28px;
+  }
 }
 
 /* ---------- shared table display (tablet) ---------- */
@@ -1480,14 +1634,47 @@ body {
   max-width: 320px;
 }
 
-/* The corners already frame the middle, so the pile does not need a tall row
-   of its own on top of them. */
+/*
+ * Corners exists to give the middle everything the edges were taking. The seat
+ * rows hug their content, the middle takes the rest, and the cards grow into
+ * it — a bigger pile and a longer run of history are the whole point of
+ * choosing this layout.
+ */
 .table-display--corners .table-display__felt {
-  align-content: space-between;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  align-content: stretch;
 }
 
 .table-display--corners .table-display__middle {
   min-height: 0;
+  align-self: stretch;
+  gap: 26px;
+}
+
+.table-display--corners {
+  --card-w: 132px;
+  --card-h: 184px;
+}
+
+.table-display--corners.table-display--compact {
+  --card-w: 108px;
+  --card-h: 150px;
+}
+
+.table-display--corners .table-display__past .card {
+  --card-w: 74px;
+  --card-h: 103px;
+}
+
+/* The corner seats shrink so the middle can have the height. */
+.table-display--corners .table-seat {
+  max-width: 270px;
+  padding: 6px 9px;
+}
+
+.table-display--corners .table-seat__fan .card-back {
+  width: 26px;
+  height: 37px;
 }
 
 .table-seat__fan {

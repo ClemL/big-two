@@ -215,7 +215,10 @@ export function TableDisplay({
   const table = room.table;
   // The plays before the current one, most recent first. History outlives the
   // trick, so a swept table can still be read.
-  const previous = previousPlays(room.history, table).slice().reverse();
+  const corners = settings.layout === "corners";
+  // Corners hands the whole middle band to the cards, so it can carry more of
+  // the trick than the edge layout, which is squeezed from both sides.
+  const previous = previousPlays(room.history, table, corners ? 6 : 3).slice().reverse();
 
   return (
     <main

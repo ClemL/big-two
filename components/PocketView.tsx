@@ -1,8 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { CardView } from "@/components/CardView";
+import { CardCount } from "@/components/CardCount";
+import { HandView } from "@/components/HandView";
 import type { Card } from "@/lib/cards";
+import type { HandLayout } from "@/lib/handSettings";
 import type { Combo } from "@/lib/combos";
 import { comboName } from "@/lib/combos";
 
@@ -21,8 +23,10 @@ export function PocketView({
   status,
   message,
   toBeat,
+  others,
   hand,
   handKey,
+  layout = "fan",
   selected,
   dimmed = [],
   canSelect,
@@ -35,8 +39,11 @@ export function PocketView({
   status: string;
   message?: string | null;
   toBeat: Combo | null;
+  /** Everyone else at the table, in seat order from your left. */
+  others: { key: number; name: string; cards: number; isTurn: boolean }[];
   hand: Card[];
   handKey: string;
+  layout?: HandLayout;
   selected: string[];
   dimmed?: string[];
   canSelect: boolean;
@@ -66,19 +73,26 @@ export function PocketView({
         )}
       </p>
 
-      <section className="hand" aria-label="Your hand" key={handKey}>
-        {hand.map((card, i) => (
-          <CardView
-            key={card.id}
-            card={card}
-            index={i}
-            selected={selected.includes(card.id)}
-            dimmed={dimmed.includes(card.id)}
-            disabled={!canSelect}
-            onClick={onToggleCard}
-          />
+      {/* The tablet shows the table, but not from where you are sitting — who is
+          about to go out is the one thing worth repeating on the phone. */}
+      <section className="pocket__others" aria-label="Cards left">
+        {others.map((seat) => (
+          <div key={seat.key} className={`pocket__other ${seat.isTurn ? "is-turn" : ""}`}>
+            <span className="pocket__other-name">{seat.name}</span>
+            <CardCount count={seat.cards} />
+          </div>
         ))}
       </section>
+
+      <HandView
+        hand={hand}
+        layout={layout}
+        handKey={handKey}
+        selected={selected}
+        dimmed={dimmed}
+        canSelect={canSelect}
+        onToggleCard={onToggleCard}
+      />
 
       <section className="actions actions--pocket">{actions}</section>
       {overlay}

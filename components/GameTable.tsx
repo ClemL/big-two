@@ -10,6 +10,7 @@ import {
   useDoubleTap,
   useExpressTable,
   useGameKeys,
+  useHandLayout,
 } from "@/components/hooks";
 import type { Card, SortMode } from "@/lib/cards";
 import { sortHand } from "@/lib/cards";
@@ -17,6 +18,7 @@ import { comboName, identify } from "@/lib/combos";
 import type { AiStyle } from "@/lib/ai";
 import { AI_STYLE_LABEL, chooseMove, suggestMove } from "@/lib/ai";
 import { mechanicalNames } from "@/lib/names";
+import { HAND_LAYOUT_LABEL, type HandLayout } from "@/lib/handSettings";
 import * as sound from "@/lib/sound";
 import {
   applyPass,
@@ -40,6 +42,7 @@ export default function GameTable() {
   const [aiStyle, setAiStyle] = useState<AiStyle>("weakest");
   const [sortMode, setSortMode] = useState<SortMode>("rank");
   const [muted, setMuted] = useState(false);
+  const [handLayout, setHandLayout] = useHandLayout();
   const seenLogEntries = useRef(0);
   const dealtRound = useRef(-1);
 
@@ -302,11 +305,17 @@ export default function GameTable() {
               ))}
             </select>
           </label>
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={deal}
-          >
+          <label className="field">
+            <span>Hand</span>
+            <select value={handLayout} onChange={(e) => setHandLayout(e.target.value as HandLayout)}>
+              {(Object.keys(HAND_LAYOUT_LABEL) as HandLayout[]).map((key) => (
+                <option key={key} value={key}>
+                  {HAND_LAYOUT_LABEL[key]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" className="btn btn--ghost" onClick={deal}>
             New match
           </button>
           <a className="btn btn--ghost" href="/play">
@@ -334,6 +343,7 @@ export default function GameTable() {
         isWinner: state.winner === p.index,
         isYou: false,
       }))}
+      handLayout={handLayout}
       roundLabel={`Round ${state.roundNumber}`}
       opponents={opponents}
       pile={
