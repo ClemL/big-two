@@ -4,7 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal } from "@/components/Modal";
 import { RulesPanel } from "@/components/RulesPanel";
 import { RoundSummary, TableView, type OpponentSeat, type PreviousPlay } from "@/components/TableView";
-import { useAutoHint, useAutoPass, useDoubleTap, useGameKeys } from "@/components/hooks";
+import {
+  useAutoHint,
+  useAutoPass,
+  useDoubleTap,
+  useExpressTable,
+  useGameKeys,
+} from "@/components/hooks";
 import type { Card, SortMode } from "@/lib/cards";
 import { sortHand } from "@/lib/cards";
 import { comboName, identify } from "@/lib/combos";
@@ -42,10 +48,18 @@ export default function GameTable() {
     [],
   );
 
-  // Deal on the client so the server render stays deterministic and hydration-safe.
+  const express = useExpressTable();
+
   useEffect(() => {
-    setState(newMatch());
     setMuted(sound.loadMutePreference());
+  }, []);
+
+  // Dealing is a decision, not something that happens to you on arrival. It
+  // also has to be client side, so the server render stays hydration-safe.
+  const deal = useCallback(() => {
+    setState(newMatch());
+    setSelected([]);
+    setMessage("");
   }, [newMatch]);
 
   // Browsers only allow audio to start from a user gesture.
@@ -193,8 +207,55 @@ export default function GameTable() {
 
   if (!state) {
     return (
-      <main className="app">
-        <p className="loading">Shuffling…</p>
+      <main className="app start">
+        <header className="topbar">
+          <div className="topbar__title">
+            <h1>Big Two</h1>
+            <span className="topbar__sub">Hong Kong rules · 鋤大弟</span>
+          </div>
+        </header>
+
+        <section className="start__panel">
+          <h2>One player, three machines</h2>
+          <label className="field field--stacked">
+            <span>Opponents</span>
+            <select value={aiStyle} onChange={(e) => setAiStyle(e.target.value as AiStyle)}>
+              {(Object.keys(AI_STYLE_LABEL) as AiStyle[]).map((style) => (
+                <option key={style} value={style}>
+                  {AI_STYLE_LABEL[style]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="start__actions">
+            <button type="button" className="btn btn--primary btn--big" onClick={deal}>
+              Play
+            </button>
+            <RulesPanel />
+          </div>
+        </section>
+
+        <section className="start__panel start__panel--table">
+          <h2>Everyone round one table?</h2>
+          <p className="lobby__hint">
+            Turns this device into the table itself: a QR code for every seat, and a Start game
+            button once people have scanned in. Nothing is dealt until you press it.
+          </p>
+          <div className="start__actions">
+            <button
+              type="button"
+              className="btn btn--primary btn--big"
+              onClick={() => void express.start({ aiStyle })}
+              disabled={express.busy}
+            >
+              {express.busy ? "Setting up…" : "Table mode"}
+            </button>
+            <a className="btn" href="/play">
+              Play with friends
+            </a>
+          </div>
+          {express.error ? <p className="lobby__error">{express.error}</p> : null}
+        </section>
       </main>
     );
   }
@@ -244,11 +305,7 @@ export default function GameTable() {
           <button
             type="button"
             className="btn btn--ghost"
-            onClick={() => {
-              setState(newMatch());
-              setSelected([]);
-              setMessage("");
-            }}
+            onClick={deal}
           >
             New match
           </button>

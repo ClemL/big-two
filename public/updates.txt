@@ -48,3 +48,5 @@
 2026-09-16T03:00:00Z - Opponent skill can be changed from the table mid-match, without resetting the round.
 2026-09-16T03:00:00Z - Cards played now fly into the middle of the table display from the seat that played them, as they already did in the single-player game.
 2026-09-16T03:00:00Z - Each seat on the table display shows its hand as a fan of card backs, so you can see who is close to going out.
+2026-09-16T05:00:00Z - Opening the game no longer deals a round at you: it now waits on a Play button, so you pick your opponents first.
+2026-09-16T05:00:00Z - A Table mode button on the front page turns this device into the table in one press, without going through Play with friends.

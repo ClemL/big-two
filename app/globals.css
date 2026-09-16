@@ -41,6 +41,46 @@ body {
   gap: 14px;
 }
 
+/* ---------- the screen before anything is dealt ---------- */
+
+.start {
+  gap: 18px;
+}
+
+.start__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 18px 20px;
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.start__panel h2 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--accent);
+}
+
+.start__panel--table {
+  background: rgba(224, 182, 66, 0.12);
+  border-color: rgba(224, 182, 66, 0.45);
+}
+
+.start__panel .lobby__hint {
+  margin: 0;
+  max-width: 56ch;
+}
+
+.start__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
 .loading {
   text-align: center;
   padding: 80px 0;
