@@ -33,6 +33,17 @@ export const PASSWORD_PER_ROOM: LimitRule = {
   windowSeconds: 600,
 };
 
+/**
+ * Invite codes carry 128 bits, so this is not standing between a guesser and a
+ * seat — it is a separate bucket from the password so a mistyped password
+ * cannot lock out somebody scanning a QR at the same table.
+ */
+export const INVITE_PER_CALLER: LimitRule = {
+  bucket: "invite-caller",
+  limit: 30,
+  windowSeconds: 600,
+};
+
 export const ROOM_CREATION: LimitRule = {
   bucket: "create",
   limit: 20,

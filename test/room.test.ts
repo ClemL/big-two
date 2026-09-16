@@ -15,6 +15,7 @@ import {
   applyIntent,
   claimSeat,
   createRoom,
+  startMatch,
   publicRoom,
   releaseSeat,
   roomVersion,
@@ -36,7 +37,21 @@ function hand(...ids: string[]): Card[] {
 }
 
 function room(seed = 42): Room {
-  return createRoom({ id: "TEST01", passwordHash: "hash", salt: "salt", seed, now: T0 });
+  return createRoom({
+    id: "TEST01",
+    passwordHash: "hash",
+    salt: "salt",
+    seed,
+    now: T0,
+    inviteCodes: ["invite-0", "invite-1", "invite-2", "invite-3"],
+  });
+}
+
+/** A room with the match under way, for tests about play rather than seating. */
+function playing(seed = 42): Room {
+  const started = startMatch(room(seed), T0, Math.random, seed);
+  assert.ok(started.ok);
+  return started.room;
 }
 
 /** Seat every player so nothing is automated, for tests about turn handling. */
@@ -126,7 +141,7 @@ test("an empty room never plays itself", () => {
 test("unclaimed seats are played by the AI up to the human's turn", () => {
   // Seat only the player holding 3♦'s left-hand neighbour, so the AI has to
   // open the round and hand the turn over.
-  const base = room(42);
+  const base = playing(42);
   const human = (base.state.turn + 1) % 4;
   const claimed = claimSeat(base, human, "token", "Kris", T0);
   assert.ok(claimed.ok);
@@ -174,7 +189,7 @@ test("an illegal combination is refused by the server, not just the client", () 
 });
 
 test("a legal play advances the round and bumps the version", () => {
-  const r = seatEveryone(room(42));
+  const r = seatEveryone(playing(42));
   const seat = r.state.turn;
   const opening = r.state.players[seat].hand.find((c) => c.id === "3D")!;
   const result = applyIntent(r, seat, { kind: "play", cardIds: [opening.id] }, T0);
@@ -197,7 +212,7 @@ test("nextRound only works once the round is finished", () => {
 });
 
 test("the public view hides other hands and never leaks the seed", () => {
-  const r = seatEveryone(room(42));
+  const r = seatEveryone(playing(42));
   const view = publicRoom(r, 1, T0);
   const serialized = JSON.stringify(view);
 
@@ -224,7 +239,7 @@ test("the polled version payload stays tiny and carries no cards", () => {
 });
 
 test("a full round can be played out through intents alone", () => {
-  let r = seatEveryone(room(9));
+  let r = seatEveryone(playing(9));
   const rng = mulberry32(3);
   let guard = 0;
   while (!r.state.finished) {
@@ -278,7 +293,7 @@ test("the table display never receives anybody's cards", () => {
 });
 
 test("a seated player is still served their own hand while a table is active", () => {
-  const r = claimTableSeat(seatEveryone(room(42)), "tablehash", T0);
+  const r = claimTableSeat(seatEveryone(playing(42)), "tablehash", T0);
   const view = publicRoom(r, 2, T0);
   assert.equal(view.seats[2].hand?.length, 13);
   assert.equal(view.tableSeatActive, true);
@@ -326,7 +341,7 @@ test("the table display cannot skip an unfinished round", () => {
 });
 
 test("plays survive the trick being swept, so the table can still be read", () => {
-  let r = seatEveryone(room(42));
+  let r = seatEveryone(playing(42));
   assert.deepEqual(r.state.history, []);
   assert.equal(r.state.trick, 0);
   const seat = r.state.turn;
@@ -371,7 +386,7 @@ test("previousPlays excludes the live pile but keeps swept tricks", () => {
 });
 
 test("the history is capped so the room payload stays pollable", () => {
-  let r = seatEveryone(room(9));
+  let r = seatEveryone(playing(9));
   let guard = 0;
   while (!r.state.finished && guard++ < 400) {
     const seat = r.state.turn;

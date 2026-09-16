@@ -11,6 +11,7 @@ import {
   applyIntent,
   applyTableIntent,
   claimSeat,
+  claimSeatByInvite,
   claimTableSeat,
   createRoom,
   isTableSeatToken,
@@ -18,6 +19,7 @@ import {
   releaseSeat,
   releaseTableSeat,
   roomVersion,
+  seatForInvite,
   seatForToken,
   touchSeat,
   touchTableSeat,
@@ -28,6 +30,7 @@ import {
 import { hashPassword, randomRoomId, randomToken, safeEqual, sha256Hex } from "./crypto.ts";
 import { clearCookie, clientKey, json, jsonError, readCookie, readJson, setCookie } from "./http.ts";
 import {
+  INVITE_PER_CALLER,
   PASSWORD_PER_CALLER,
   PASSWORD_PER_ROOM,
   ROOM_CREATION,
@@ -50,6 +53,11 @@ const PRESENCE_REFRESH_MS = 60_000;
 
 export const seatCookieName = (roomId: string) => `bigtwo_seat_${roomId}`;
 export const tableCookieName = (roomId: string) => `bigtwo_table_${roomId}`;
+
+/** One unguessable code per seat. 128 bits, so it is not worth grinding at. */
+function newInviteCodes(): string[] {
+  return [0, 1, 2, 3].map(() => randomToken(16));
+}
 
 function tooMany(retryAfterSeconds: number): Response {
   return jsonError("Too many attempts — wait a few minutes.", 429, {
@@ -102,7 +110,13 @@ export async function createRoomEndpoint(request: Request): Promise<Response> {
 
   // Retry on the vanishingly unlikely id collision rather than overwrite a room.
   for (let attempt = 0; attempt < 5; attempt++) {
-    const room = createRoom({ id: randomRoomId(), passwordHash, salt, aiStyle });
+    const room = createRoom({
+      id: randomRoomId(),
+      passwordHash,
+      salt,
+      aiStyle,
+      inviteCodes: newInviteCodes(),
+    });
     if (await store.create(room)) {
       return json({ id: room.id, storage: store.kind }, 201);
     }
@@ -134,6 +148,45 @@ export async function joinEndpoint(request: Request, roomId: string): Promise<Re
   const result = claimSeat(room, seat, await sha256Hex(token), name);
   if (!result.ok) return jsonError(result.error, result.status);
 
+  const failure = saveOutcome(await getRoomStore().save(result.room, room.version));
+  if (failure) return failure;
+
+  return setCookie(json(publicRoom(result.room, seat)), seatCookieName(room.id), token);
+}
+
+/**
+ * Take a seat from its QR code.
+ *
+ * The code stands in for the password here: it is longer, it is specific to one
+ * seat, and you had to be at the table to scan it. The seat's own rules are
+ * unchanged — an occupied seat whose owner is still present is still refused.
+ */
+export async function inviteEndpoint(request: Request, roomId: string): Promise<Response> {
+  const body = await readJson<{ code?: unknown; name?: unknown }>(request);
+  if (!body) return jsonError("Expected a JSON body.", 400);
+
+  const room = await loadRoom(roomId);
+  if (!room) return jsonError("Room not found.", 404);
+
+  const limited = await enforce([
+    { rule: INVITE_PER_CALLER, key: `${room.id}:${clientKey(request)}` },
+  ]);
+  if (limited) return tooMany(limited.retryAfterSeconds);
+
+  const code = typeof body.code === "string" ? body.code : "";
+  const name = typeof body.name === "string" ? body.name : "";
+
+  // Already holding this seat — a reload or a second scan, not a new claim.
+  const existing = await seatOf(request, room);
+  if (existing !== null && seatForInvite(room, code) === existing) {
+    return json(publicRoom(touchSeat(room, existing), existing));
+  }
+
+  const token = randomToken();
+  const result = claimSeatByInvite(room, code, await sha256Hex(token), name);
+  if (!result.ok) return jsonError(result.error, result.status);
+
+  const seat = seatForInvite(result.room, code)!;
   const failure = saveOutcome(await getRoomStore().save(result.room, room.version));
   if (failure) return failure;
 
@@ -197,6 +250,7 @@ export async function versionEndpoint(request: Request, roomId: string): Promise
 function parseIntent(body: { action?: unknown; cardIds?: unknown }): Intent | null {
   if (body.action === "pass") return { kind: "pass" };
   if (body.action === "nextRound") return { kind: "nextRound" };
+  if (body.action === "startMatch") return { kind: "startMatch" };
   if (body.action === "play") {
     const ids = body.cardIds;
     if (!Array.isArray(ids) || ids.length === 0 || ids.length > 5) return null;
@@ -284,6 +338,7 @@ function parseTableIntent(body: {
   delta?: unknown;
 }): TableIntent | null {
   if (body.action === "nextRound") return { kind: "nextRound" };
+  if (body.action === "startMatch") return { kind: "startMatch" };
   if (body.action === "resetMatch") return { kind: "resetMatch" };
   if (body.action === "adjustScore") {
     if (typeof body.seat !== "number" || typeof body.delta !== "number") return null;

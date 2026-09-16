@@ -35,3 +35,7 @@
 2026-09-13T01:30:00Z - The table password is now shown in the clear and starts as a suggested three-letter word, with a Shuffle button for another.
 2026-09-13T01:30:00Z - Your name starts as a random Gen 1 Pokemon instead of an empty box.
 2026-09-13T01:30:00Z - Sitting alone now says so, with the link to send round; when someone takes a seat mid-match the table tells you.
+2026-09-16T01:00:00Z - Table mode now shows a QR code for each seat: scan one with a phone to sit down, no password or seat picking.
+2026-09-16T01:00:00Z - The table display has a Start game button, and hands every seat nobody took to the AI.
+2026-09-16T01:00:00Z - Rooms now wait before dealing instead of starting the moment one person sits, so there is time to scan in.
+2026-09-16T01:00:00Z - Seat codes can be hidden from the table display once everyone is in, and shown again if someone needs to rejoin.
