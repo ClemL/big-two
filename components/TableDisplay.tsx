@@ -41,9 +41,29 @@ export function TableDisplay({
   // built after mount.
   const [origin, setOrigin] = useState("");
 
+  const [showPassword, setShowPassword] = useState(true);
+  const [password, setPassword] = useState("");
+  const [now, setNow] = useState(0);
+
   useEffect(() => {
     setOrigin(window.location.origin);
-  }, []);
+    // Stashed by the express setup on /play. It is never sent by the server —
+    // the store only holds a PBKDF2 hash — so this is the only way the table
+    // can show the password it was created with.
+    try {
+      setPassword(sessionStorage.getItem(`bigtwo_pw_${roomId}`) ?? "");
+    } catch {
+      // Private browsing can refuse storage; the label is a convenience.
+    }
+  }, [roomId]);
+
+  // One interval for the clock, ticking only while a match is under way.
+  useEffect(() => {
+    if (room.phase !== "playing" || room.startedAt === null) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [room.phase, room.startedAt]);
   const seenLogEntries = useRef(initial.log.length);
   const dealtRound = useRef(initial.roundNumber);
 
@@ -129,6 +149,12 @@ export function TableDisplay({
   useWakeLock(true);
 
   const waiting = room.phase === "lobby";
+  const elapsed =
+    room.startedAt === null || now === 0 ? null : Math.max(0, Math.floor((now - room.startedAt) / 1000));
+  const clock =
+    elapsed === null
+      ? null
+      : `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`;
   const seated = room.seats.filter((seat) => seat.claimed).length;
 
   const headline = waiting ? (
@@ -162,6 +188,11 @@ export function TableDisplay({
         </div>
         <div className="table-display__controls">
           {message ? <span className="status__message">{message}</span> : null}
+          {clock ? (
+            <span className="table-display__clock" aria-label="Time since the match started">
+              {clock}
+            </span>
+          ) : null}
           <button
             type="button"
             className="btn"
@@ -215,6 +246,24 @@ export function TableDisplay({
         </div>
       </header>
 
+      {password ? (
+        <div className="table-pass">
+          <span className="table-pass__label">Table password</span>
+          {showPassword ? <code className="table-pass__value">{password}</code> : null}
+          <button
+            type="button"
+            className="btn btn--tiny"
+            onClick={() => setShowPassword((v) => !v)}
+            aria-pressed={!showPassword}
+          >
+            {showPassword ? "Hide" : "Show"}
+          </button>
+          <span className="table-pass__hint">
+            for anyone joining from {origin.replace(/^https?:\/\//, "")} without scanning
+          </span>
+        </div>
+      ) : null}
+
       <div className="table-display__felt">
         {room.seats.map((seat) => (
           <section
@@ -251,19 +300,20 @@ export function TableDisplay({
               <span
                 className={`table-seat__score ${room.scores[seat.index] < 0 ? "is-negative" : ""}`}
               >
+                <span className="table-seat__score-label">score</span>
                 {room.scores[seat.index] > 0 ? `+${room.scores[seat.index]}` : room.scores[seat.index]}
               </span>
             </div>
-            {showCodes && room.inviteCodes?.[seat.index] && origin ? (
+            {/* A filled seat has no use for its code, and an empty square of
+                white is the clearest "this one is still free" the table has. */}
+            {showCodes && !seat.claimed && room.inviteCodes?.[seat.index] && origin ? (
               <div className="table-seat__invite">
                 <QrCode
                   className="table-seat__qr"
                   text={`${origin}/room/${room.id}/j/${room.inviteCodes[seat.index]}`}
                   title={`Scan to take seat ${seat.index + 1}`}
                 />
-                <span className="table-seat__invite-hint">
-                  {seat.claimed ? "seated — rescan to rejoin" : "scan to sit here"}
-                </span>
+                <span className="table-seat__invite-hint">scan to sit here</span>
               </div>
             ) : null}
             {scoring ? (
@@ -283,6 +333,26 @@ export function TableDisplay({
             ) : null}
           </section>
         ))}
+
+        <div className="table-display__middle">
+          <div className="table-display__past" aria-label="Recent plays">
+            {waiting || previous.length === 0
+              ? null
+              : previous.map((play, i) => (
+                  <div
+                    className="table-history__entry"
+                    key={`${play.trick}-${play.player}-${play.combo.cards[0].id}`}
+                    style={{ opacity: 1 - i * 0.22 }}
+                  >
+                    <span className="table-history__who">{room.seats[play.player].name}</span>
+                    <div className="table-history__cards">
+                      {play.combo.cards.map((card) => (
+                        <CardView key={card.id} card={card} />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+          </div>
 
         <div className="table-display__pile">
           {waiting ? (
@@ -311,30 +381,8 @@ export function TableDisplay({
             </div>
           )}
         </div>
+        </div>
       </div>
-
-      <footer className="table-history" aria-label="Recent plays">
-        <span className="table-history__label">Last plays</span>
-        {previous.length === 0 ? (
-          <span className="table-history__empty">Nothing yet this trick</span>
-        ) : (
-          previous.map((play, i) => (
-            <div
-              className="table-history__entry"
-              key={`${play.trick}-${play.player}-${play.combo.cards[0].id}`}
-            >
-              <span className="table-history__who">
-                {room.seats[play.player].name} · {comboName(play.combo)}
-              </span>
-              <div className="table-history__cards" style={{ opacity: 1 - i * 0.22 }}>
-                {play.combo.cards.map((card) => (
-                  <CardView key={card.id} card={card} />
-                ))}
-              </div>
-            </div>
-          ))
-        )}
-      </footer>
 
       {room.finished && room.lastDeltas ? (
         <Modal title={`${room.seats[room.winner!].name} won round ${room.roundNumber}`}>

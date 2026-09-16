@@ -17,6 +17,7 @@ import {
   isTableSeatToken,
   publicRoom,
   releaseSeat,
+  SEAT_COUNT,
   releaseTableSeat,
   roomVersion,
   seatForInvite,
@@ -27,6 +28,7 @@ import {
   type Room,
   type TableIntent,
 } from "../room.ts";
+import { mechanicalNames } from "../names.ts";
 import { hashPassword, randomRoomId, randomToken, safeEqual, sha256Hex } from "./crypto.ts";
 import { clearCookie, clientKey, json, jsonError, readCookie, readJson, setCookie } from "./http.ts";
 import {
@@ -250,7 +252,11 @@ export async function versionEndpoint(request: Request, roomId: string): Promise
 function parseIntent(body: { action?: unknown; cardIds?: unknown }): Intent | null {
   if (body.action === "pass") return { kind: "pass" };
   if (body.action === "nextRound") return { kind: "nextRound" };
-  if (body.action === "startMatch") return { kind: "startMatch" };
+  if (body.action === "startMatch") {
+    // Named here, not by the caller: a seat name is shown to everyone at the
+    // table, so it is not something a client gets to write.
+    return { kind: "startMatch", botNames: mechanicalNames(SEAT_COUNT) };
+  }
   if (body.action === "play") {
     const ids = body.cardIds;
     if (!Array.isArray(ids) || ids.length === 0 || ids.length > 5) return null;
@@ -338,7 +344,11 @@ function parseTableIntent(body: {
   delta?: unknown;
 }): TableIntent | null {
   if (body.action === "nextRound") return { kind: "nextRound" };
-  if (body.action === "startMatch") return { kind: "startMatch" };
+  if (body.action === "startMatch") {
+    // Named here, not by the caller: a seat name is shown to everyone at the
+    // table, so it is not something a client gets to write.
+    return { kind: "startMatch", botNames: mechanicalNames(SEAT_COUNT) };
+  }
   if (body.action === "resetMatch") return { kind: "resetMatch" };
   if (body.action === "adjustScore") {
     if (typeof body.seat !== "number" || typeof body.delta !== "number") return null;

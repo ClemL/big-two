@@ -10,6 +10,7 @@ import { sortHand } from "@/lib/cards";
 import { comboName, identify } from "@/lib/combos";
 import type { AiStyle } from "@/lib/ai";
 import { AI_STYLE_LABEL, chooseMove, suggestMove } from "@/lib/ai";
+import { mechanicalNames } from "@/lib/names";
 import * as sound from "@/lib/sound";
 import {
   applyPass,
@@ -36,11 +37,16 @@ export default function GameTable() {
   const seenLogEntries = useRef(0);
   const dealtRound = useRef(-1);
 
+  const newMatch = useCallback(
+    () => startRound({ names: ["You", ...mechanicalNames(3)] }),
+    [],
+  );
+
   // Deal on the client so the server render stays deterministic and hydration-safe.
   useEffect(() => {
-    setState(startRound({}));
+    setState(newMatch());
     setMuted(sound.loadMutePreference());
-  }, []);
+  }, [newMatch]);
 
   // Browsers only allow audio to start from a user gesture.
   useEffect(() => {
@@ -239,7 +245,7 @@ export default function GameTable() {
             type="button"
             className="btn btn--ghost"
             onClick={() => {
-              setState(startRound({}));
+              setState(newMatch());
               setSelected([]);
               setMessage("");
             }}

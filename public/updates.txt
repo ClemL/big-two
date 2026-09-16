@@ -39,3 +39,8 @@
 2026-09-16T01:00:00Z - The table display has a Start game button, and hands every seat nobody took to the AI.
 2026-09-16T01:00:00Z - Rooms now wait before dealing instead of starting the moment one person sits, so there is time to scan in.
 2026-09-16T01:00:00Z - Seat codes can be hidden from the table display once everyone is in, and shown again if someone needs to rejoin.
+2026-09-16T02:10:00Z - Play with friends has a one-button table setup: it makes the room, takes the table and shows the password on screen, with a Hide button.
+2026-09-16T02:10:00Z - A seat's QR code disappears once somebody is sitting there, so the codes left showing are the free seats.
+2026-09-16T02:10:00Z - The AI opponents are now called Mechanical Pikachu and friends, a different set each match.
+2026-09-16T02:10:00Z - The table display shows the last few plays in the middle beside the cards on the table, instead of in a strip along the bottom.
+2026-09-16T02:10:00Z - The table display runs a match clock, labels each seat's score, and draws the played cards larger.
