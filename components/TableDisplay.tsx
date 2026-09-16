@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CardView } from "@/components/CardView";
+import { QrCode } from "@/components/QrCode";
 import { Modal } from "@/components/Modal";
 import { comboName } from "@/lib/combos";
 import { previousPlays } from "@/lib/engine";
@@ -35,6 +36,14 @@ export function TableDisplay({
   const [busy, setBusy] = useState(false);
   const [scoring, setScoring] = useState(false);
   const [message, setMessage] = useState("");
+  const [showCodes, setShowCodes] = useState(true);
+  // window.location is not there for the server render, so the invite links are
+  // built after mount.
+  const [origin, setOrigin] = useState("");
+
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
   const seenLogEntries = useRef(initial.log.length);
   const dealtRound = useRef(initial.roundNumber);
 
@@ -119,6 +128,26 @@ export function TableDisplay({
   useTableTurnSignal(room.turn, room.finished);
   useWakeLock(true);
 
+  const waiting = room.phase === "lobby";
+  const seated = room.seats.filter((seat) => seat.claimed).length;
+
+  const headline = waiting ? (
+    <strong className="table-display__turn">
+      Waiting to start · {seated} of 4 seats taken — the rest play as AI
+    </strong>
+  ) : (
+    <>
+      Round {room.roundNumber} ·{" "}
+      {room.finished ? (
+        `${room.seats[room.winner!].name} won`
+      ) : (
+        <strong className="table-display__turn">
+          ▸ Seat {room.turn + 1} · {room.seats[room.turn].name} to play
+        </strong>
+      )}
+    </>
+  );
+
   const table = room.table;
   // The plays before the current one, most recent first. History outlives the
   // trick, so a swept table can still be read.
@@ -129,16 +158,7 @@ export function TableDisplay({
       <header className="table-display__bar">
         <div>
           <h1>Room {room.id}</h1>
-          <span className="table-display__sub">
-            Round {room.roundNumber} ·{" "}
-            {room.finished ? (
-              `${room.seats[room.winner!].name} won`
-            ) : (
-              <strong className="table-display__turn">
-                ▸ Seat {room.turn + 1} · {room.seats[room.turn].name} to play
-              </strong>
-            )}
-          </span>
+          <span className="table-display__sub">{headline}</span>
         </div>
         <div className="table-display__controls">
           {message ? <span className="status__message">{message}</span> : null}
@@ -150,13 +170,32 @@ export function TableDisplay({
           >
             {scoring ? "Done scoring" : "Adjust scores"}
           </button>
+          {room.phase === "lobby" ? (
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => void control({ action: "startMatch" })}
+              disabled={busy}
+            >
+              Start game
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn--primary"
+              onClick={() => void control({ action: "nextRound" })}
+              disabled={busy || !room.finished}
+            >
+              Next round
+            </button>
+          )}
           <button
             type="button"
-            className="btn btn--primary"
-            onClick={() => void control({ action: "nextRound" })}
-            disabled={busy || !room.finished}
+            className="btn"
+            onClick={() => setShowCodes((v) => !v)}
+            aria-pressed={showCodes}
           >
-            Next round
+            {showCodes ? "Hide codes" : "Show codes"}
           </button>
           <button
             type="button"
@@ -181,7 +220,7 @@ export function TableDisplay({
           <section
             key={seat.index}
             className={`table-seat ${EDGE[seat.index]} ${
-              room.turn === seat.index && !room.finished ? "is-turn" : ""
+              room.turn === seat.index && !room.finished && !waiting ? "is-turn" : ""
             } ${room.winner === seat.index ? "is-winner" : ""}`}
           >
             <div className="table-seat__number">Seat {seat.index + 1}</div>
@@ -193,7 +232,9 @@ export function TableDisplay({
               ) : (
                 seat.name
               )}
-              {seat.automated ? <span className="seat__badge seat__badge--muted">AI</span> : null}
+              {seat.automated && !waiting ? (
+                <span className="seat__badge seat__badge--muted">AI</span>
+              ) : null}
               {room.passed[seat.index] ? (
                 <span className="seat__badge seat__badge--muted">passed</span>
               ) : null}
@@ -202,8 +243,10 @@ export function TableDisplay({
               ) : null}
             </div>
             <div className="table-seat__stats">
+              {/* No card count before the deal — `startMatch` reshuffles, so the
+                  pre-start hand sizes describe cards nobody has been given. */}
               <span className="table-seat__cards">
-                {seat.cards} card{seat.cards === 1 ? "" : "s"}
+                {waiting ? (seat.claimed ? "ready" : "waiting") : `${seat.cards} card${seat.cards === 1 ? "" : "s"}`}
               </span>
               <span
                 className={`table-seat__score ${room.scores[seat.index] < 0 ? "is-negative" : ""}`}
@@ -211,6 +254,18 @@ export function TableDisplay({
                 {room.scores[seat.index] > 0 ? `+${room.scores[seat.index]}` : room.scores[seat.index]}
               </span>
             </div>
+            {showCodes && room.inviteCodes?.[seat.index] && origin ? (
+              <div className="table-seat__invite">
+                <QrCode
+                  className="table-seat__qr"
+                  text={`${origin}/room/${room.id}/j/${room.inviteCodes[seat.index]}`}
+                  title={`Scan to take seat ${seat.index + 1}`}
+                />
+                <span className="table-seat__invite-hint">
+                  {seat.claimed ? "seated — rescan to rejoin" : "scan to sit here"}
+                </span>
+              </div>
+            ) : null}
             {scoring ? (
               <div className="table-seat__adjust">
                 {[-5, -1, 1, 5].map((delta) => (
@@ -230,7 +285,12 @@ export function TableDisplay({
         ))}
 
         <div className="table-display__pile">
-          {table ? (
+          {waiting ? (
+            <div className="pile__empty">
+              Scan a seat to join
+              <span>Press Start game when everyone is in — AI takes the rest</span>
+            </div>
+          ) : table ? (
             <>
               <div className="table-display__to-beat">
                 {room.seats[table.player].name} played {comboName(table.combo)} — beat it

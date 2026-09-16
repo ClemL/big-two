@@ -53,7 +53,19 @@ export interface SeatRecord {
   /** null means nobody has claimed the seat, so the AI plays it. */
   tokenHash: string | null;
   lastSeen: number;
+  /**
+   * The secret behind this seat's QR code. Unlike the password it admits you
+   * to exactly one seat, and unlike the seat token it is a bearer credential
+   * you trade for one — so it goes to the table display and nowhere else.
+   */
+  inviteCode: string;
 }
+
+/**
+ * A room waits in `lobby` until the table display starts the match. Nothing is
+ * dealt and no AI moves until then, which is what gives people time to scan in.
+ */
+export type RoomPhase = "lobby" | "playing";
 
 export interface Room {
   id: string;
@@ -63,6 +75,7 @@ export interface Room {
   salt: string;
   seats: SeatRecord[];
   tableSeat: TableSeatRecord | null;
+  phase: RoomPhase;
   state: GameState;
   aiStyle: AiStyle;
   createdAt: number;
@@ -82,6 +95,11 @@ export interface CreateRoomOptions {
   seed?: number;
   aiStyle?: AiStyle;
   now?: number;
+  /**
+   * One per seat. Passed in rather than generated here for the same reason the
+   * password hash is: this module stays synchronous and free of crypto.
+   */
+  inviteCodes: string[];
 }
 
 export function createRoom(options: CreateRoomOptions): Room {
@@ -91,8 +109,14 @@ export function createRoom(options: CreateRoomOptions): Room {
     version: 1,
     passwordHash: options.passwordHash,
     salt: options.salt,
-    seats: DEFAULT_SEAT_NAMES.map((name) => ({ name, tokenHash: null, lastSeen: 0 })),
+    seats: DEFAULT_SEAT_NAMES.map((name, i) => ({
+      name,
+      tokenHash: null,
+      lastSeen: 0,
+      inviteCode: options.inviteCodes[i] ?? "",
+    })),
     tableSeat: null,
+    phase: "lobby",
     state: startRound({ seed: options.seed, names: DEFAULT_SEAT_NAMES }),
     aiStyle: options.aiStyle ?? "weakest",
     createdAt: now,
@@ -138,7 +162,8 @@ export function claimSeat(
   }
   const trimmed = name.trim().slice(0, 16) || DEFAULT_SEAT_NAMES[index];
   const seats = room.seats.slice();
-  seats[index] = { name: trimmed, tokenHash, lastSeen: now };
+  // The code stays put: a player who reloads scans the same QR back in.
+  seats[index] = { name: trimmed, tokenHash, lastSeen: now, inviteCode: seat.inviteCode };
   const state = {
     ...room.state,
     players: room.state.players.map((p) => (p.index === index ? { ...p, name: trimmed } : p)),
@@ -146,9 +171,48 @@ export function claimSeat(
   return { ok: true, room: bump({ ...room, seats, state }, now) };
 }
 
-export function releaseSeat(room: Room, index: number, now = Date.now()): Room {
+/**
+ * Which seat an invite code opens, or null.
+ *
+ * Compared in full over every seat rather than returning on the first hit: the
+ * codes are secrets, and a loop that exits early leaks which prefix matched.
+ */
+export function seatForInvite(room: Room, code: string): number | null {
+  if (code.length === 0) return null;
+  let found = -1;
+  for (let i = 0; i < room.seats.length; i++) {
+    const candidate = room.seats[i].inviteCode;
+    let diff = candidate.length === code.length ? 0 : 1;
+    for (let c = 0; c < code.length; c++) {
+      diff |= (candidate.charCodeAt(c) ?? -1) ^ code.charCodeAt(c);
+    }
+    if (diff === 0) found = i;
+  }
+  return found === -1 ? null : found;
+}
+
+/** Take the seat an invite code names. The seat's own rules still apply. */
+export function claimSeatByInvite(
+  room: Room,
+  code: string,
+  tokenHash: string,
+  name: string,
+  now = Date.now(),
+): RoomResult {
+  const seat = seatForInvite(room, code);
+  if (seat === null) return { ok: false, error: "That invite is not valid here.", status: 404 };
+  return claimSeat(room, seat, tokenHash, name, now);
+}
+
+export function releaseSeat(room: Room, index: number, now = Date.now(), inviteCode?: string): Room {
   const seats = room.seats.slice();
-  seats[index] = { name: DEFAULT_SEAT_NAMES[index], tokenHash: null, lastSeen: 0 };
+  seats[index] = {
+    name: DEFAULT_SEAT_NAMES[index],
+    tokenHash: null,
+    lastSeen: 0,
+    // A fresh code when given one, so a photo of the old QR cannot walk back in.
+    inviteCode: inviteCode ?? seats[index].inviteCode,
+  };
   const state = {
     ...room.state,
     players: room.state.players.map((p) =>
@@ -201,8 +265,9 @@ export function touchTableSeat(room: Room, now = Date.now()): Room {
 
 /** Actions only the table display may take. */
 export type TableIntent =
+  | { kind: "startMatch" }
   | { kind: "nextRound" }
-  | { kind: "resetMatch" }
+  | { kind: "resetMatch"; inviteCodes?: string[] }
   | { kind: "adjustScore"; seat: number; delta: number };
 
 export function applyTableIntent(
@@ -212,6 +277,10 @@ export function applyTableIntent(
   rng = Math.random,
 ): RoomResult {
   const touched = touchTableSeat(room, now);
+
+  if (intent.kind === "startMatch") {
+    return startMatch(touched, now, rng);
+  }
 
   if (intent.kind === "nextRound") {
     if (!touched.state.finished) {
@@ -223,8 +292,13 @@ export function applyTableIntent(
 
   if (intent.kind === "resetMatch") {
     // Fresh deal and the chips back to zero, keeping who is sitting where.
-    const next = {
+    // A new match means new QR codes, so a photo of the old ones goes stale.
+    const codes = intent.inviteCodes;
+    const next: Room = {
       ...touched,
+      seats: codes
+        ? touched.seats.map((seat, i) => ({ ...seat, inviteCode: codes[i] ?? seat.inviteCode }))
+        : touched.seats,
       state: startRound({ names: touched.state.players.map((p) => p.name) }),
     };
     return { ok: true, room: bump(advanceAutomatedSeats(next, now, rng), now) };
@@ -245,9 +319,36 @@ export function applyTableIntent(
   };
 }
 
+/**
+ * Deal and hand every unclaimed seat to the AI.
+ *
+ * Only the table display calls this, and only once — a second call would
+ * reshuffle a match in progress.
+ */
+export function startMatch(
+  room: Room,
+  now = Date.now(),
+  rng = Math.random,
+  seed?: number,
+): RoomResult {
+  if (room.phase === "playing") {
+    return { ok: false, error: "The match has already started.", status: 409 };
+  }
+  // Dealt here rather than at creation so the cards land when play begins,
+  // however long people took to scan in. The seed is threaded through for the
+  // same reason `createRoom` takes one: a match has to be replayable.
+  const started: Room = {
+    ...room,
+    phase: "playing",
+    state: startRound({ seed, names: room.seats.map((seat) => seat.name) }),
+  };
+  return { ok: true, room: bump(advanceAutomatedSeats(started, now, rng), now) };
+}
+
 export type Intent =
   | { kind: "play"; cardIds: string[] }
   | { kind: "pass" }
+  | { kind: "startMatch" }
   | { kind: "nextRound" };
 
 /**
@@ -257,6 +358,8 @@ export type Intent =
  * waiting for players, not deal rounds to itself forever.
  */
 export function advanceAutomatedSeats(room: Room, now = Date.now(), rng = Math.random): Room {
+  // Nothing moves in the lobby: that is the whole point of having one.
+  if (room.phase !== "playing") return room;
   if (activeSeats(room, now).length === 0) return room;
   let state = room.state;
   let guard = 0;
@@ -294,6 +397,17 @@ export function applyIntent(
 ): RoomResult {
   const withPresence = touchSeat(room, seat, now);
   const state = withPresence.state;
+
+  // Anyone seated can start, not only the table display: a room played on
+  // phones alone has no tablet to press the button, and would otherwise sit in
+  // the lobby forever.
+  if (intent.kind === "startMatch") {
+    return startMatch(withPresence, now, rng);
+  }
+
+  if (room.phase !== "playing") {
+    return { ok: false, error: "The match has not started yet.", status: 409 };
+  }
 
   if (intent.kind === "nextRound") {
     if (!state.finished) return { ok: false, error: "The round is still going.", status: 409 };
@@ -343,6 +457,14 @@ export interface PublicRoom {
   id: string;
   version: number;
   seat: number | null;
+  /** Whether the match has been started from the table display yet. */
+  phase: RoomPhase;
+  /**
+   * Seat invite codes, in seat order. Present only for the table display: it
+   * is the screen in the middle of the table, so it is the one client allowed
+   * to turn them into QR codes. A player never receives them.
+   */
+  inviteCodes?: string[];
   /** True when a tablet is acting as the shared table. */
   tableSeatActive: boolean;
   /** Set when this client is the table display rather than a player. */
@@ -378,6 +500,8 @@ export function publicRoom(
     id: room.id,
     version: room.version,
     seat,
+    phase: room.phase,
+    inviteCodes: isTableSeat ? room.seats.map((record) => record.inviteCode) : undefined,
     tableSeatActive: tableSeatActive(room, now),
     isTableSeat,
     history: state.history,
@@ -387,7 +511,12 @@ export function publicRoom(
       cards: state.players[i].hand.length,
       claimed: isSeatClaimed(record),
       automated: seatIsAutomated(room, i, now),
-      hand: !isTableSeat && i === seat ? state.players[i].hand : undefined,
+      // No hand before the deal: `startMatch` reshuffles, so showing the
+      // pre-start cards would just be a lie that changes when play begins.
+      hand:
+        !isTableSeat && i === seat && room.phase === "playing"
+          ? state.players[i].hand
+          : undefined,
     })),
     turn: state.turn,
     table: state.table,
@@ -410,6 +539,7 @@ export interface RoomVersion {
   version: number;
   turn: number;
   finished: boolean;
+  phase: RoomPhase;
   tableSeatActive: boolean;
   seats: { claimed: boolean; automated: boolean; name: string }[];
 }
@@ -419,6 +549,7 @@ export function roomVersion(room: Room, now = Date.now()): RoomVersion {
     version: room.version,
     turn: room.state.turn,
     finished: room.state.finished,
+    phase: room.phase,
     tableSeatActive: tableSeatActive(room, now),
     seats: room.seats.map((record, i) => ({
       claimed: isSeatClaimed(record),

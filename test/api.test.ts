@@ -6,6 +6,7 @@ import {
   createRoomEndpoint,
   joinEndpoint,
   leaveSeatEndpoint,
+  inviteEndpoint,
   moveEndpoint,
   releaseTableEndpoint,
   seatCookieName,
@@ -77,6 +78,13 @@ async function seatedClient(roomId: string, seat: number, name: string, password
   return { who, view: (await response.json()) as PublicRoom };
 }
 
+/** Rooms open in the lobby, so a test about play has to deal first. */
+async function startMatchAs(roomId: string, who: ReturnType<typeof client>) {
+  const response = await moveEndpoint(post(`/x/${roomId}/move`, { action: "startMatch" }, who), roomId);
+  assert.equal(response.status, 200, await response.clone().text());
+  return (await response.json()) as PublicRoom;
+}
+
 test("creating a room validates the password and returns an id", async () => {
   freshStore();
   for (const password of ["", "ab", "x".repeat(129), 42]) {
@@ -135,6 +143,7 @@ test("state is redacted per caller and the seed never appears", async () => {
   const roomId = await newRoom();
   const { who: a } = await seatedClient(roomId, 0, "Kris");
   const { who: b } = await seatedClient(roomId, 1, "Srini");
+  await startMatchAs(roomId, a);
 
   const viewA = (await (await stateEndpoint(request("GET", "/x", undefined, a), roomId)).json()) as PublicRoom;
   const viewB = (await (await stateEndpoint(request("GET", "/x", undefined, b), roomId)).json()) as PublicRoom;
@@ -165,8 +174,9 @@ test("the polled version endpoint carries no cards", async () => {
 test("moving requires a seat cookie, and rejects forged cards and stale versions", async () => {
   freshStore();
   const roomId = await newRoom();
-  const { who: a, view } = await seatedClient(roomId, 0, "Kris");
+  const { who: a } = await seatedClient(roomId, 0, "Kris");
   await seatedClient(roomId, 1, "Srini");
+  const view = await startMatchAs(roomId, a);
 
   const anonymous = await moveEndpoint(post("/x", { action: "pass" }), roomId);
   assert.equal(anonymous.status, 403);
@@ -210,6 +220,7 @@ test("a full legal play succeeds and bumps the version", async () => {
     (await seatedClient(roomId, 2, "C")).who,
     (await seatedClient(roomId, 3, "D")).who,
   ];
+  await startMatchAs(roomId, seats[0]);
   const before = (await (await stateEndpoint(request("GET", "/x", undefined, seats[0]), roomId)).json()) as PublicRoom;
   const opener = seats[before.turn];
   const view = (await (await stateEndpoint(request("GET", "/x", undefined, opener), roomId)).json()) as PublicRoom;
@@ -272,6 +283,7 @@ test("a player still sees their own hand while the table is active", async () =>
   freshStore();
   const roomId = await newRoom();
   const { who: player } = await seatedClient(roomId, 0, "Kris");
+  await startMatchAs(roomId, player);
   const tablet = client();
   absorb(tablet, await claimTableEndpoint(post("/x", { password: "letmein" }, tablet), roomId));
 
@@ -357,7 +369,14 @@ test("a seat left silent long enough is taken over, and polling prevents it", as
   const { SEAT_IDLE_MS, claimSeat, createRoom, seatIsAutomated, touchSeat } = await import(
     "../lib/room.ts"
   );
-  const base = createRoom({ id: "IDLE01", passwordHash: "h", salt: "s", seed: 1, now: 0 });
+  const base = createRoom({
+    id: "IDLE01",
+    passwordHash: "h",
+    salt: "s",
+    seed: 1,
+    now: 0,
+    inviteCodes: ["a", "b", "c", "d"],
+  });
   const claimed = claimSeat(base, 0, "token", "Kris", 0);
   assert.ok(claimed.ok);
 
@@ -368,4 +387,148 @@ test("a seat left silent long enough is taken over, and polling prevents it", as
   const kept = touchSeat(claimed.room, 0, SEAT_IDLE_MS - 1);
   assert.equal(seatIsAutomated(kept, 0, later), false);
   assert.equal(kept.version, claimed.room.version, "presence does not bump the version");
+});
+
+
+/* ------------------------ table mode: QR seat invites --------------------- */
+
+/** The table display is the only client that is sent the seat invite codes. */
+async function tabletWithCodes(roomId: string, password = "letmein") {
+  const tablet = client();
+  const response = absorb(
+    tablet,
+    await claimTableEndpoint(post("/x", { password }, tablet), roomId),
+  );
+  assert.equal(response.status, 200);
+  const view = (await response.json()) as PublicRoom;
+  assert.ok(view.inviteCodes, "the table display receives the invite codes");
+  return { tablet, codes: view.inviteCodes! };
+}
+
+test("invite codes reach the table display and no one else", async () => {
+  freshStore();
+  const roomId = await newRoom();
+  const { codes } = await tabletWithCodes(roomId);
+  assert.equal(codes.length, 4);
+  assert.equal(new Set(codes).size, 4, "each seat has its own code");
+  for (const code of codes) assert.ok(code.length >= 32, "codes are not guessable");
+
+  // A player, and an anonymous caller, must never see them.
+  const { who: player } = await seatedClient(roomId, 0, "Kris");
+  for (const who of [player, undefined]) {
+    const response = await stateEndpoint(request("GET", "/x", undefined, who), roomId);
+    const text = await response.text();
+    assert.equal(text.includes("inviteCodes"), false, "no invite codes in a player payload");
+    for (const code of codes) {
+      assert.equal(text.includes(code), false, "no invite code leaks by value");
+    }
+  }
+});
+
+test("scanning a seat's code takes that seat, and only that seat", async () => {
+  freshStore();
+  const roomId = await newRoom();
+  const { codes } = await tabletWithCodes(roomId);
+
+  const scanner = client();
+  const response = absorb(
+    scanner,
+    await inviteEndpoint(post("/x", { code: codes[2], name: "Pikachu" }, scanner), roomId),
+  );
+  assert.equal(response.status, 200, await response.clone().text());
+  const view = (await response.json()) as PublicRoom;
+  assert.equal(view.seat, 2, "the code opens its own seat");
+  assert.equal(view.seats[2].name, "Pikachu");
+  assert.equal(view.seats[2].claimed, true);
+  for (const other of [0, 1, 3]) assert.equal(view.seats[other].claimed, false);
+});
+
+test("a wrong invite code is refused", async () => {
+  freshStore();
+  const roomId = await newRoom();
+  await tabletWithCodes(roomId);
+  for (const code of ["", "nope", "0".repeat(32)]) {
+    const response = await inviteEndpoint(post("/x", { code }, client()), roomId);
+    assert.equal(response.status, 404, `code ${JSON.stringify(code)} is refused`);
+  }
+});
+
+test("rescanning your own code returns your seat rather than burning it", async () => {
+  freshStore();
+  const roomId = await newRoom();
+  const { codes } = await tabletWithCodes(roomId);
+  const scanner = client();
+  absorb(scanner, await inviteEndpoint(post("/x", { code: codes[1] }, scanner), roomId));
+
+  const again = await inviteEndpoint(post("/x", { code: codes[1] }, scanner), roomId);
+  assert.equal(again.status, 200);
+  assert.equal(((await again.json()) as PublicRoom).seat, 1);
+});
+
+test("a seat somebody is sitting in cannot be scanned out from under them", async () => {
+  freshStore();
+  const roomId = await newRoom();
+  const { codes } = await tabletWithCodes(roomId);
+  const first = client();
+  absorb(first, await inviteEndpoint(post("/x", { code: codes[0] }, first), roomId));
+
+  const thief = await inviteEndpoint(post("/x", { code: codes[0] }, client()), roomId);
+  assert.equal(thief.status, 409, "the seat is taken");
+});
+
+test("nothing is dealt, and no hand is served, until the match starts", async () => {
+  freshStore();
+  const roomId = await newRoom();
+  const { who: player } = await seatedClient(roomId, 0, "Kris");
+
+  const waiting = (await (
+    await stateEndpoint(request("GET", "/x", undefined, player), roomId)
+  ).json()) as PublicRoom;
+  assert.equal(waiting.phase, "lobby");
+  assert.equal(waiting.seats[0].hand, undefined, "no cards before the deal");
+
+  // And no move is accepted while the room is still waiting.
+  const early = await moveEndpoint(post("/x", { action: "pass" }, player), roomId);
+  assert.equal(early.status, 409);
+
+  const started = await startMatchAs(roomId, player);
+  assert.equal(started.phase, "playing");
+  assert.equal(started.seats[0].hand?.length, 13);
+});
+
+test("starting fills the empty seats with AI, and starting twice is refused", async () => {
+  freshStore();
+  const roomId = await newRoom();
+  // One claim only: a second would take the table over and void the first token.
+  const { tablet, codes } = await tabletWithCodes(roomId);
+  const scanner = client();
+  absorb(scanner, await inviteEndpoint(post("/x", { code: codes[0], name: "Kris" }, scanner), roomId));
+
+  const response = await controlEndpoint(post("/x", { action: "startMatch" }, tablet), roomId);
+  assert.equal(response.status, 200, await response.clone().text());
+  const view = (await response.json()) as PublicRoom;
+  assert.equal(view.phase, "playing");
+  assert.equal(view.seats[0].automated, false, "the human seat is not automated");
+  for (const seat of [1, 2, 3]) {
+    assert.equal(view.seats[seat].automated, true, `seat ${seat} is played by the AI`);
+  }
+
+  const again = await controlEndpoint(post("/x", { action: "startMatch" }, tablet), roomId);
+  assert.equal(again.status, 409, "a match in progress is not restarted");
+});
+
+test("the table display still never receives a hand, in the lobby or in play", async () => {
+  freshStore();
+  const roomId = await newRoom();
+  const { tablet } = await tabletWithCodes(roomId);
+  await seatedClient(roomId, 0, "Kris");
+
+  for (const phase of ["lobby", "playing"]) {
+    if (phase === "playing") {
+      await controlEndpoint(post("/x", { action: "startMatch" }, tablet), roomId);
+    }
+    const response = await stateEndpoint(request("GET", "/x", undefined, tablet), roomId);
+    const text = await response.text();
+    assert.equal(text.includes('"hand"'), false, `no hand on the table display in ${phase}`);
+  }
 });

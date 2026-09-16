@@ -34,8 +34,8 @@ app/            App Router entry, global stylesheet, icon
 app/api/        Room routes (create, join, state, version, move)
 components/     TableView (shared layout), GameTable (single player), OnlineTable,
                 PocketView (phone), TableDisplay + TableSeatGate (tablet),
-                RoomLobby, CreateRoom, CardView, CardFace (SVG deck), RulesPanel,
-                Modal, BuildFooter
+                RoomLobby, CreateRoom, ScanJoin (QR landing), QrCode (SVG),
+                CardView, CardFace (SVG deck), RulesPanel, Modal, BuildFooter
 lib/cards.ts    Deck, rank/suit ordering, seeded shuffle and deal
 lib/combos.ts   Combination detection, comparison, legal move generation
 lib/engine.ts   Round state machine: play, pass, trick clearing, round end
@@ -43,6 +43,8 @@ lib/scoring.ts  Hong Kong penalty multipliers
 lib/ai.ts       Opponent policies
 lib/strategy.ts Exact minimum-plays hand decomposition
 lib/sound.ts    Web Audio sound effects
+lib/names.ts    Suggested seat names and table passwords
+lib/qr.ts       QR encoder (byte mode, versions 1-10) for the seat invites
 lib/room.ts     Multiplayer room model: seats, intents, redaction
 lib/server/     api (every endpoint), room storage (Upstash REST + memory),
                 crypto, rate limiting, HTTP helpers
@@ -97,6 +99,23 @@ update `test/` and the in-app rules panel in the same commit.
 * **Presence is refreshed by the version poll, not only by a state fetch.** Tying it to state
   fetches meant a table where nobody moved aged every watching player out, and the AI took their
   seats. The poll only writes when presence is over a minute stale, so it stays cheap.
+* **A seat invite code is not a seat token.** The code behind a seat's QR is a
+  bearer credential you trade for a seat token; it goes to the table display and
+  nowhere else, because the display is the screen in the middle of the table.
+  `publicRoom()` sends `inviteCodes` only when the caller is the table, and a
+  test asserts a player's payload never contains one — by key or by value.
+* **A room waits in `lobby` until somebody starts it.** Nothing is dealt and no
+  AI moves until then, which is what gives people time to scan in. The deal
+  happens at `startMatch`, not at `createRoom`, so no client is shown cards that
+  a later shuffle will replace — `publicRoom()` withholds the hand until the
+  phase is `playing`. Either the table display or any seated player may start:
+  a room played on phones alone has no tablet to press the button.
+* **The QR encoder is verified by decoding, not by inspection.** `npm test`
+  pins the structure it can check without a dependency; `node bench/qr-decode.mjs`
+  (after `npm i --no-save jsqr`) round-trips every version through an
+  independent decoder. Both bugs it found — a BCH remainder that never
+  converged, and alignment patterns dropped where their centre crossed a timing
+  pattern — produced codes that looked plausible and scanned nowhere.
 * **Room writes are compare-and-set on the version.** Requests interleave across serverless
   instances, so an unconditional write silently drops concurrent moves.
 

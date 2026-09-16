@@ -382,6 +382,21 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
 
   // A tablet is showing the shared state to the room, so the phone only needs
   // to carry this player's own hand and actions.
+  // The table display runs the lobby, so a phone in pocket mode only needs to
+  // be told to wait.
+  if (room.tableSeatActive && seat !== null && room.phase === "lobby") {
+    return (
+      <main className="app pocket">
+        <header className="pocket__bar">
+          <span className="pocket__seat">{`Seat ${seat + 1} · ${seatName(seat)}`}</span>
+          <span className="pocket__room">{`Room ${room.id}`}</span>
+        </header>
+        <p className="pocket__status">You are in. Waiting for the table to start the game…</p>
+        <p className="pocket__to-beat">Your cards appear here once they are dealt.</p>
+      </main>
+    );
+  }
+
   if (room.tableSeatActive && seat !== null) {
     return (
       <PocketView
@@ -404,8 +419,29 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
 
 
   const shareLink = `${origin}/room/${room.id}`;
+  const waiting = room.phase === "lobby";
 
-  const banner =
+  const banner = waiting ? (
+    <section className="presence presence--alone" role="status">
+      <p className="presence__line">
+        <strong>Waiting to start.</strong> Empty seats will play as AI. Start when everyone who is
+        coming has joined.
+      </p>
+      <p className="presence__share">
+        Send them <code>{shareLink}</code>
+      </p>
+      <p className="presence__share">
+        <button
+          type="button"
+          className="btn btn--primary"
+          onClick={() => void send({ action: "startMatch" })}
+          disabled={busy}
+        >
+          Start game
+        </button>
+      </p>
+    </section>
+  ) :
     arrival || alone ? (
       <section className={`presence ${alone ? "presence--alone" : "presence--joined"}`} role="status">
         {arrival ? (
