@@ -532,3 +532,42 @@ test("the table display still never receives a hand, in the lobby or in play", a
     assert.equal(text.includes('"hand"'), false, `no hand on the table display in ${phase}`);
   }
 });
+
+
+test("the table can retune the opponents without resetting the round", async () => {
+  freshStore();
+  const roomId = await newRoom();
+  const { tablet } = await tabletWithCodes(roomId);
+  await seatedClient(roomId, 0, "Kris");
+  await controlEndpoint(post("/x", { action: "startMatch" }, tablet), roomId);
+
+  const response = await controlEndpoint(
+    post("/x", { action: "setAiStyle", aiStyle: "strategist" }, tablet),
+    roomId,
+  );
+  assert.equal(response.status, 200, await response.clone().text());
+  const view = (await response.json()) as PublicRoom;
+  assert.equal(view.aiStyle, "strategist");
+  assert.equal(view.phase, "playing", "the match carries on");
+  assert.equal(view.roundNumber, 1, "the round is not restarted");
+
+  // A style the server does not know is refused rather than stored.
+  const bogus = await controlEndpoint(
+    post("/x", { action: "setAiStyle", aiStyle: "telepathic" }, tablet),
+    roomId,
+  );
+  assert.equal(bogus.status, 400);
+});
+
+test("only the table display may retune the opponents", async () => {
+  freshStore();
+  const roomId = await newRoom();
+  await tabletWithCodes(roomId);
+  const { who: player } = await seatedClient(roomId, 0, "Kris");
+
+  const response = await controlEndpoint(
+    post("/x", { action: "setAiStyle", aiStyle: "strategist" }, player),
+    roomId,
+  );
+  assert.equal(response.status, 403);
+});

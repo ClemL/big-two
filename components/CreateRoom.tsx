@@ -38,9 +38,70 @@ export function CreateRoom() {
     }
   }, [password, aiStyle]);
 
+  /**
+   * One button from nothing to a table on a tablet: make the room, claim the
+   * table seat with the password it was created with, and go. The password is
+   * stashed for the display to show, because the server only keeps its hash.
+   */
+  const expressTable = useCallback(async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const word = password.length >= 3 ? password : suggestPassword();
+      const created = await fetch("/api/rooms", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: word, aiStyle }),
+      });
+      const body = (await created.json().catch(() => ({}))) as { id?: string; error?: string };
+      if (!created.ok || !body.id) {
+        setError(body.error ?? "Could not start a table.");
+        return;
+      }
+      const claimed = await fetch(`/api/rooms/${body.id}/table`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: word }),
+      });
+      if (!claimed.ok) {
+        // The room exists, so send them to it rather than losing the work.
+        setError("The table was made but this device could not claim it.");
+        window.location.href = `/room/${body.id}`;
+        return;
+      }
+      try {
+        sessionStorage.setItem(`bigtwo_pw_${body.id}`, word);
+      } catch {
+        // Without storage the table simply shows no password label.
+      }
+      window.location.href = `/room/${body.id}/table`;
+    } finally {
+      setBusy(false);
+    }
+  }, [password, aiStyle]);
+
   return (
     <main className="app lobby">
       <h1>Play with friends</h1>
+
+      <section className="lobby__express">
+        <div>
+          <h2>Playing round one table?</h2>
+          <p className="lobby__hint">
+            Sets up a table on this device and shows a QR code for every seat. Everyone scans one and
+            plays from their phone; the AI takes whatever is left.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn btn--primary btn--big"
+          onClick={() => void expressTable()}
+          disabled={busy}
+        >
+          {busy ? "Setting up…" : "Set up this device as the table"}
+        </button>
+      </section>
+
       <p className="lobby__hint">
         No accounts. Start a table, pick a password, and send the room code round. Whoever turns up
         claims a seat; the AI plays the ones nobody takes.

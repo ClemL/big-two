@@ -151,6 +151,25 @@ export const PASSWORD_WORDS = [
   "zoo",
 ] as const;
 
+/** What an AI-played seat is called: "Mechanical Pikachu" and friends. */
+export const MECHANICAL_PREFIX = "Mechanical ";
+
+/**
+ * Distinct names for the seats nobody took, so three robots at one table are
+ * told apart. Drawn without replacement — repeating "Mechanical Eevee" twice
+ * makes the log unreadable.
+ */
+export function mechanicalNames(count: number, rng: () => number = Math.random): string[] {
+  const pool = POKEMON_NAMES.slice();
+  const out: string[] = [];
+  for (let i = 0; i < count; i++) {
+    if (pool.length === 0) break;
+    const index = Math.floor(rng() * pool.length) % pool.length;
+    out.push(MECHANICAL_PREFIX + pool.splice(index, 1)[0]);
+  }
+  return out;
+}
+
 function pick<T>(pool: readonly T[], rng: () => number): T {
   return pool[Math.floor(rng() * pool.length) % pool.length];
 }

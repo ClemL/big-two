@@ -76,6 +76,8 @@ export interface Room {
   seats: SeatRecord[];
   tableSeat: TableSeatRecord | null;
   phase: RoomPhase;
+  /** When the match was started, for the table's clock. Null while waiting. */
+  startedAt: number | null;
   state: GameState;
   aiStyle: AiStyle;
   createdAt: number;
@@ -117,6 +119,7 @@ export function createRoom(options: CreateRoomOptions): Room {
     })),
     tableSeat: null,
     phase: "lobby",
+    startedAt: null,
     state: startRound({ seed: options.seed, names: DEFAULT_SEAT_NAMES }),
     aiStyle: options.aiStyle ?? "weakest",
     createdAt: now,
@@ -265,9 +268,10 @@ export function touchTableSeat(room: Room, now = Date.now()): Room {
 
 /** Actions only the table display may take. */
 export type TableIntent =
-  | { kind: "startMatch" }
+  | { kind: "startMatch"; botNames?: string[] }
   | { kind: "nextRound" }
   | { kind: "resetMatch"; inviteCodes?: string[] }
+  | { kind: "setAiStyle"; aiStyle: AiStyle }
   | { kind: "adjustScore"; seat: number; delta: number };
 
 export function applyTableIntent(
@@ -279,7 +283,14 @@ export function applyTableIntent(
   const touched = touchTableSeat(room, now);
 
   if (intent.kind === "startMatch") {
-    return startMatch(touched, now, rng);
+    return startMatch(touched, now, rng, undefined, intent.botNames);
+  }
+
+  if (intent.kind === "setAiStyle") {
+    // Takes effect from the next AI turn; the hands already dealt stand, so
+    // changing this mid-round retunes the opponents without resetting play.
+    const next = { ...touched, aiStyle: intent.aiStyle };
+    return { ok: true, room: bump(advanceAutomatedSeats(next, now, rng), now) };
   }
 
   if (intent.kind === "nextRound") {
@@ -330,17 +341,30 @@ export function startMatch(
   now = Date.now(),
   rng = Math.random,
   seed?: number,
+  botNames: string[] = [],
 ): RoomResult {
   if (room.phase === "playing") {
     return { ok: false, error: "The match has already started.", status: 409 };
   }
+  // Seats nobody took are named here rather than at creation: until the match
+  // starts they are still open, and "Mechanical Eevee" on an empty chair reads
+  // as a player who has already arrived.
+  let botIndex = 0;
+  const seats = room.seats.map((seat, i) => {
+    if (isSeatClaimed(seat)) return seat;
+    const name = botNames[botIndex++];
+    return name ? { ...seat, name } : seat;
+  });
+
   // Dealt here rather than at creation so the cards land when play begins,
   // however long people took to scan in. The seed is threaded through for the
   // same reason `createRoom` takes one: a match has to be replayable.
   const started: Room = {
     ...room,
+    seats,
     phase: "playing",
-    state: startRound({ seed, names: room.seats.map((seat) => seat.name) }),
+    startedAt: now,
+    state: startRound({ seed, names: seats.map((seat) => seat.name) }),
   };
   return { ok: true, room: bump(advanceAutomatedSeats(started, now, rng), now) };
 }
@@ -348,7 +372,7 @@ export function startMatch(
 export type Intent =
   | { kind: "play"; cardIds: string[] }
   | { kind: "pass" }
-  | { kind: "startMatch" }
+  | { kind: "startMatch"; botNames?: string[] }
   | { kind: "nextRound" };
 
 /**
@@ -402,7 +426,7 @@ export function applyIntent(
   // phones alone has no tablet to press the button, and would otherwise sit in
   // the lobby forever.
   if (intent.kind === "startMatch") {
-    return startMatch(withPresence, now, rng);
+    return startMatch(withPresence, now, rng, undefined, intent.botNames);
   }
 
   if (room.phase !== "playing") {
@@ -459,6 +483,8 @@ export interface PublicRoom {
   seat: number | null;
   /** Whether the match has been started from the table display yet. */
   phase: RoomPhase;
+  /** Epoch ms the match started, so any client can render the same clock. */
+  startedAt: number | null;
   /**
    * Seat invite codes, in seat order. Present only for the table display: it
    * is the screen in the middle of the table, so it is the one client allowed
@@ -501,6 +527,7 @@ export function publicRoom(
     version: room.version,
     seat,
     phase: room.phase,
+    startedAt: room.startedAt,
     inviteCodes: isTableSeat ? room.seats.map((record) => record.inviteCode) : undefined,
     tableSeatActive: tableSeatActive(room, now),
     isTableSeat,

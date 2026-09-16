@@ -515,7 +515,8 @@ body {
 }
 
 /* Thrown into the middle from the seat that played it. */
-.pile__cards .card {
+.pile__cards .card,
+.table-display__cards .card {
   transform: rotate(var(--tilt, 0deg));
   animation: card-throw 0.36s cubic-bezier(0.2, 0.85, 0.3, 1) backwards;
   animation-delay: calc(var(--i, 0) * 45ms);
@@ -1189,8 +1190,16 @@ body {
     ".    top    ."
     "left pile   right"
     ".    bottom .";
-  gap: 10px;
+  gap: var(--felt-gap, 10px);
   align-items: center;
+  /*
+   * A flex child will not shrink below its content without this, which at large
+   * text or QR settings pushed the bottom seats off the screen entirely. Now the
+   * felt scrolls instead of clipping: cranking the sliders can cost a scroll,
+   * but it can never hide a seat.
+   */
+  min-height: 0;
+  overflow: auto;
   background: rgba(0, 0, 0, 0.22);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 18px;
@@ -1202,7 +1211,7 @@ body {
   flex-direction: column;
   gap: 4px;
   align-items: center;
-  padding: 10px 12px;
+  padding: var(--seat-pad, 10px) calc(var(--seat-pad, 10px) + 2px);
   border-radius: 12px;
   border: 2px solid transparent;
   background: rgba(0, 0, 0, 0.28);
@@ -1284,8 +1293,8 @@ body {
  * arm's length, but never grows past the seat panel it sits in.
  */
 .table-seat__qr {
-  width: clamp(88px, 13vmin, 150px);
-  height: clamp(88px, 13vmin, 150px);
+  width: calc(clamp(88px, 13vmin, 150px) * var(--qr-scale, 1));
+  height: calc(clamp(88px, 13vmin, 150px) * var(--qr-scale, 1));
   border-radius: 6px;
   display: block;
 }
@@ -1302,15 +1311,253 @@ body {
   margin-top: 2px;
 }
 
-.table-display__pile {
+/*
+ * The middle cell: spent plays to the left, the hand to beat on the right.
+ * History used to sit in a footer strip, which put the thing you compare
+ * against at the far edge of a tablet from the cards you compare it to.
+ */
+.table-display__middle {
   grid-area: pile;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  min-height: 190px;
+}
+
+.table-display__past {
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: center;
+  gap: 10px;
+  flex: 0 1 auto;
+  overflow: hidden;
+}
+
+.table-display__pile {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  min-height: 190px;
+  flex: 0 0 auto;
 }
+
+/* The table is read from a metre away, so its cards run larger than a hand's. */
+.table-display {
+  --card-w: 104px;
+  --card-h: 145px;
+  --table-font: 1;
+  --qr-scale: 1;
+  --seat-pad: 12px;
+  --felt-gap: 10px;
+  font-size: calc(1rem * var(--table-font));
+}
+
+/*
+ * Themes repaint the display only. They set the same tokens the rest of the
+ * stylesheet already reads, so nothing below needs to know a theme exists.
+ */
+.table-display[data-table-theme="midnight"] {
+  --felt: #0d1526;
+  --felt-light: #1b2a47;
+  --accent: #7aa2f7;
+  background: radial-gradient(circle at 50% 18%, #1b2a47 0%, #0d1526 58%, #060a13 100%);
+}
+
+.table-display[data-table-theme="slate"] {
+  --felt: #1e2124;
+  --felt-light: #32373c;
+  --accent: #d7b377;
+  background: radial-gradient(circle at 50% 18%, #32373c 0%, #1e2124 58%, #121415 100%);
+}
+
+.table-display[data-table-theme="walnut"] {
+  --felt: #2a1a12;
+  --felt-light: #4a2e20;
+  --accent: #e3a857;
+  background: radial-gradient(circle at 50% 18%, #4a2e20 0%, #2a1a12 58%, #170d08 100%);
+}
+
+/* For a bright room or a tablet seen from three seats away. */
+.table-display[data-table-theme="contrast"] {
+  --felt: #000000;
+  --felt-light: #101010;
+  --ink: #ffffff;
+  --muted: #d0d0d0;
+  --accent: #ffd400;
+  background: #000000;
+}
+
+.table-display[data-table-theme="contrast"] .table-seat {
+  border-color: rgba(255, 255, 255, 0.5);
+  background: #101010;
+}
+
+.table-display--cosy {
+  --seat-pad: 18px;
+  --felt-gap: 16px;
+}
+
+.table-display--compact {
+  --seat-pad: 6px;
+  --felt-gap: 5px;
+  --card-w: 84px;
+  --card-h: 117px;
+}
+
+/*
+ * Corner layout: the middle is given over entirely to the cards, and each seat
+ * is pushed into a corner with its scores. Worth having on a tablet in
+ * portrait, where the edge layout squeezes the pile from both sides.
+ */
+.table-display--corners .table-display__felt {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    "left  top"
+    "pile  pile"
+    "bottom right";
+}
+
+.table-display--corners .table-seat--left {
+  justify-self: start;
+}
+
+.table-display--corners .table-seat--top {
+  justify-self: end;
+}
+
+.table-display--corners .table-seat--bottom {
+  justify-self: start;
+}
+
+.table-display--corners .table-seat--right {
+  justify-self: end;
+}
+
+.table-display--corners .table-seat {
+  max-width: 320px;
+}
+
+/* The corners already frame the middle, so the pile does not need a tall row
+   of its own on top of them. */
+.table-display--corners .table-display__felt {
+  align-content: space-between;
+}
+
+.table-display--corners .table-display__middle {
+  min-height: 0;
+}
+
+.table-seat__fan {
+  display: flex;
+  justify-content: center;
+  margin: 2px 0 4px;
+}
+
+.table-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px;
+  min-width: min(560px, 76vw);
+}
+
+.table-options input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.table-display__past .card {
+  --card-w: 58px;
+  --card-h: 81px;
+}
+
+.table-display__clock {
+  font-variant-numeric: tabular-nums;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  padding: 4px 10px;
+  min-width: 68px;
+  text-align: center;
+}
+
+.table-seat__score-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---------- express setup, and the password the table was made with ---------- */
+
+.lobby__express {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(224, 182, 66, 0.12);
+  border: 1px solid rgba(224, 182, 66, 0.45);
+}
+
+.lobby__express h2 {
+  margin: 0 0 2px;
+  font-size: 16px;
+  color: var(--accent);
+}
+
+.lobby__express .lobby__hint {
+  margin: 0;
+  max-width: 52ch;
+}
+
+.btn--big {
+  font-size: 15px;
+  padding: 12px 18px;
+}
+
+.table-pass {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.26);
+  font-size: 13px;
+}
+
+.table-pass__label {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.table-pass__value {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+  background: rgba(0, 0, 0, 0.35);
+  border-radius: 6px;
+  padding: 2px 10px;
+}
+
+.table-pass__hint {
+  color: var(--muted);
+  font-size: 11px;
+}
+
 
 .table-display__to-beat {
   font-size: 15px;
