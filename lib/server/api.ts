@@ -44,6 +44,14 @@ import { getRoomStore, type SaveResult } from "./store.ts";
 
 const AI_STYLES: AiStyle[] = ["weakest", "random", "strategist"];
 
+/** What a new room gets unless the caller asks for something else. */
+const DEFAULT_AI_STYLE: AiStyle = "strategist";
+/**
+ * Long enough to read a play before the next one lands. Instant resolves a
+ * whole row of opponents between two polls, which leaves nothing to watch.
+ */
+const DEFAULT_AI_DELAY_MS = 1500;
+
 /**
  * How stale presence has to get before the version poll rewrites it.
  *
@@ -106,7 +114,9 @@ export async function createRoomEndpoint(request: Request): Promise<Response> {
   if (password.length < 3 || password.length > 128) {
     return jsonError("Choose a password between 3 and 128 characters.", 400);
   }
-  const aiStyle = AI_STYLES.includes(body.aiStyle as AiStyle) ? (body.aiStyle as AiStyle) : "weakest";
+  const aiStyle = AI_STYLES.includes(body.aiStyle as AiStyle)
+    ? (body.aiStyle as AiStyle)
+    : DEFAULT_AI_STYLE;
 
   const store = getRoomStore();
   const salt = randomToken(16);
@@ -119,6 +129,7 @@ export async function createRoomEndpoint(request: Request): Promise<Response> {
       passwordHash,
       salt,
       aiStyle,
+      aiDelayMs: DEFAULT_AI_DELAY_MS,
       inviteCodes: newInviteCodes(),
     });
     if (await store.create(room)) {

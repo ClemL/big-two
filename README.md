@@ -337,16 +337,22 @@ seats before the hand fans in.
 
 ### Watching the opponents play
 
-By default the AI resolves every waiting seat inside the request that triggered
-it, so a whole row of opponents can come and go between two polls with nothing
-to see. The table display can set a **pace** — 1, 2, 3 or 5 seconds — and the
-opponents then play one seat at a time, each landing as its own version bump so
-every client gets to watch it arrive.
+A new room opens on **Competitive** opponents at a **1.5 second pace**: they
+play one seat at a time, each landing as its own version bump so every client
+gets to watch it arrive. The table display can change both — the pace runs from
+instant through 1, 1.5, 2, 3 and 5 seconds.
+
+Instant is still there and still resolves every waiting seat inside the request
+that triggered it, which is fast but means a whole row of opponents can come and
+go between two polls with nothing to see.
 
 There is no background job behind this: `tickAi` runs from the version endpoint,
 so whoever is polling carries the clock forward. That is consistent with the
 rest of the room, which already refuses to advance at all unless a human is
 still at the table.
+
+Single player has no room to pace, so it uses its own timer: **1125ms** between
+AI turns, up from 750ms for the same reason.
 
 ### Sending a play
 

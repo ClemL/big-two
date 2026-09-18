@@ -41,6 +41,7 @@ const EDGE = ["table-seat--bottom", "table-seat--left", "table-seat--top", "tabl
 const AI_PACES = [
   { ms: 0, label: "Instant" },
   { ms: 1000, label: "1 second" },
+  { ms: 1500, label: "1.5 seconds" },
   { ms: 2000, label: "2 seconds" },
   { ms: 3000, label: "3 seconds" },
   { ms: 5000, label: "5 seconds" },

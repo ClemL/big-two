@@ -8,7 +8,7 @@ import { useExpressTable } from "@/components/hooks";
 /** Start a table, or hop into one someone else started. */
 export function CreateRoom() {
   const [password, setPassword] = useState("");
-  const [aiStyle, setAiStyle] = useState<AiStyle>("weakest");
+  const [aiStyle, setAiStyle] = useState<AiStyle>("strategist");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);

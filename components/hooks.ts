@@ -236,7 +236,7 @@ export function useExpressTable(): {
       const created = await fetch("/api/rooms", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: word, aiStyle: options.aiStyle ?? "weakest" }),
+        body: JSON.stringify({ password: word, aiStyle: options.aiStyle ?? "strategist" }),
       });
       const body = (await created.json().catch(() => ({}))) as { id?: string; error?: string };
       if (!created.ok || !body.id) {

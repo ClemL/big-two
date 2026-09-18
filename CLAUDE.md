@@ -116,6 +116,10 @@ update `test/` and the in-app rules panel in the same commit.
   independent decoder. Both bugs it found — a BCH remainder that never
   converged, and alignment patterns dropped where their centre crossed a timing
   pattern — produced codes that looked plausible and scanned nowhere.
+* **Product defaults live in `lib/server/api.ts`, not in `createRoom`.** A new room is Competitive at
+  a 1.5 second pace; `createRoom` itself stays a neutral builder defaulting to instant, which is what
+  keeps the engine and AI tests running at full speed. Any pace chosen as a default must also be one
+  of `AI_PACES` in `TableDisplay`, or the control opens on a blank value.
 * **Paced AI plays are carried by whoever polls, and every carried play bumps the version.**
   There is no server loop: `tickAi` runs from the version endpoint. Saving an advanced room without
   a version bump makes the play invisible, because clients only refetch state when the version

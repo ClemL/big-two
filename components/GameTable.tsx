@@ -33,13 +33,14 @@ import {
 } from "@/lib/engine";
 
 const HUMAN = 0;
-const AI_DELAY_MS = 750;
+/** Half again as long as it was, so a play can be read before the next. */
+const AI_DELAY_MS = 1125;
 
 export default function GameTable() {
   const [state, setState] = useState<GameState | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [message, setMessage] = useState<string>("");
-  const [aiStyle, setAiStyle] = useState<AiStyle>("weakest");
+  const [aiStyle, setAiStyle] = useState<AiStyle>("strategist");
   const [sortMode, setSortMode] = useState<SortMode>("rank");
   const [muted, setMuted] = useState(false);
   const [handLayout, setHandLayout] = useHandLayout();
