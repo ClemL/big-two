@@ -188,6 +188,7 @@ moves. Polling pauses when the tab is hidden and resumes on focus.
 | `GET /api/rooms/:id/version` | Cheap poll: version, turn, seat status |
 | `GET /api/rooms/:id/state` | Full state, redacted for the caller's seat |
 | `POST /api/rooms/:id/move` | Play, pass or start the next round |
+| `POST /api/rooms/:id/name` | Rename the seat you hold |
 | `POST /api/rooms/:id/table` | Claim the shared table display |
 | `DELETE /api/rooms/:id/table` | Release it |
 | `POST /api/rooms/:id/control` | Table only: next round, restart match, adjust a score |
@@ -333,6 +334,40 @@ seats before the hand fans in.
 * **Safe-area insets** keep the controls clear of the notch and home indicator,
   and inputs are 16px so iOS Safari does not zoom the page on focus and leave it
   there.
+
+### Watching the opponents play
+
+By default the AI resolves every waiting seat inside the request that triggered
+it, so a whole row of opponents can come and go between two polls with nothing
+to see. The table display can set a **pace** — 1, 2, 3 or 5 seconds — and the
+opponents then play one seat at a time, each landing as its own version bump so
+every client gets to watch it arrive.
+
+There is no background job behind this: `tickAi` runs from the version endpoint,
+so whoever is polling carries the clock forward. That is consistent with the
+rest of the room, which already refuses to advance at all unless a human is
+still at the table.
+
+### Sending a play
+
+* **On the tablet**, a play arrives rather than appearing: a one-second flight
+  in from the seat that sent it, with the cards of a multi-card play following
+  one another in.
+* **On a phone**, the pocket layout has no pile — the tablet has it — so the
+  cards you sent lift away towards the table instead of simply vanishing from
+  your hand.
+
+### Changing your name
+
+Tap your seat name in the phone header. The lobby is behind you once you are
+seated, and the name is what everyone else reads on the table, so it needs to be
+reachable from the one screen a player keeps. Renaming needs your seat cookie,
+not the password, and leaves the seat token, invite code and turn order alone.
+
+### Held upright
+
+In portrait there is no width for a trick strip beside the pile, so the table
+keeps the hand to beat and the single play before it.
 
 ### Turn signals
 

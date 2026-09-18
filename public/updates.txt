@@ -54,3 +54,8 @@
 2026-09-16T12:00:00Z - Every player's remaining cards now show as a row of ticks that shortens as they play, turning amber near the end and red on the last card.
 2026-09-16T12:00:00Z - On a phone with a table display running, the other players' remaining cards are now listed above your hand.
 2026-09-16T12:00:00Z - Corner seats give the middle of the table more room: larger played cards and twice as much trick history.
+2026-09-17T09:00:00Z - Tap your name on the phone to change it; everyone at the table sees the new one.
+2026-09-17T09:00:00Z - Playing from a phone now shows the cards lifting away towards the table instead of just vanishing from your hand.
+2026-09-17T09:00:00Z - On the table display a play now flies in from the seat that sent it, slowly enough to follow.
+2026-09-17T09:00:00Z - Held in portrait, the table shows the hand to beat and the one play before it.
+2026-09-17T09:00:00Z - The table can set an AI pace, so opponents play one at a time with a few seconds to watch each play land.

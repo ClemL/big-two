@@ -150,6 +150,10 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
           body: JSON.stringify({ ...body, version: room.version }),
         });
         if (response.ok) {
+          if (Array.isArray(body.cardIds)) {
+            const ids = new Set(body.cardIds as string[]);
+            setJustPlayed(myHand.filter((card) => ids.has(card.id)));
+          }
           setRoom((await response.json()) as PublicRoom);
           setSelected([]);
           setMessage("");
@@ -165,7 +169,28 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
         setBusy(false);
       }
     },
-    [roomId, room.version, refresh],
+    [roomId, room.version, refresh, myHand],
+  );
+
+  // The phone has no pile, so it shows the cards you sent on their way out.
+  const [justPlayed, setJustPlayed] = useState<Card[] | null>(null);
+  useEffect(() => {
+    if (!justPlayed) return;
+    const timer = setTimeout(() => setJustPlayed(null), 1400);
+    return () => clearTimeout(timer);
+  }, [justPlayed]);
+
+  const rename = useCallback(
+    async (name: string) => {
+      const response = await fetch(`/api/rooms/${roomId}/name`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (response.ok) setRoom((await response.json()) as PublicRoom);
+      else await refresh();
+    },
+    [roomId, refresh],
   );
 
   const registerTap = useDoubleTap();
@@ -405,6 +430,9 @@ export function OnlineTable({ roomId, initial, onLeave }: OnlineTableProps) {
       <PocketView
         roomLabel={`Room ${room.id}`}
         seatLabel={`Seat ${seat + 1} · ${seatName(seat)}`}
+        seatName={seatName(seat)}
+        onRename={(name) => void rename(name)}
+        justPlayed={justPlayed}
         status={status}
         message={message}
         toBeat={room.table?.combo ?? null}

@@ -37,6 +37,15 @@ const POLL_MS = 2000;
 /** Where each seat sits around the tablet, and how its plays fly in. */
 const EDGE = ["table-seat--bottom", "table-seat--left", "table-seat--top", "table-seat--right"];
 
+/** Pacing presets, in milliseconds between AI plays. */
+const AI_PACES = [
+  { ms: 0, label: "Instant" },
+  { ms: 1000, label: "1 second" },
+  { ms: 2000, label: "2 seconds" },
+  { ms: 3000, label: "3 seconds" },
+  { ms: 5000, label: "5 seconds" },
+];
+
 export function TableDisplay({
   roomId,
   initial,
@@ -532,6 +541,28 @@ export function TableDisplay({
               <span className="field__hint">
                 Shared by the table, unlike the rest here. It applies from the next AI turn, so the
                 round in progress carries on with the hands already dealt.
+              </span>
+            </label>
+
+            <label className="field field--stacked">
+              <span>AI pace</span>
+              <select
+                value={String(room.aiDelayMs)}
+                disabled={busy}
+                onChange={(e) =>
+                  void control({ action: "setAiDelay", aiDelayMs: Number(e.target.value) })
+                }
+              >
+                {AI_PACES.map((pace) => (
+                  <option key={pace.ms} value={pace.ms}>
+                    {pace.label}
+                  </option>
+                ))}
+              </select>
+              <span className="field__hint">
+                How long the opponents wait between plays. Instant resolves a whole row of them
+                between two polls, so nobody sees the cards land; a pace gives each play its own
+                moment on the table.
               </span>
             </label>
           </div>

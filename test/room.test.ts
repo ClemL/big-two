@@ -5,6 +5,8 @@ import { identify } from "../lib/combos.ts";
 import { HISTORY_LIMIT, legalMovesFor, previousPlays } from "../lib/engine.ts";
 import {
   SEAT_IDLE_MS,
+  aiPlayDue,
+  renameSeat,
   TABLE_IDLE_MS,
   applyTableIntent,
   claimTableSeat,
@@ -400,4 +402,131 @@ test("the history is capped so the room payload stays pollable", () => {
     r = result.room;
     assert.ok(r.state.history.length <= HISTORY_LIMIT, "history stays capped");
   }
+});
+
+/* ---------------------------------------------------------------------- */
+/* Paced AI plays                                                          */
+/* ---------------------------------------------------------------------- */
+
+/** A room mid-match with one human seated, so the AI covers the other three. */
+function pacedRoom(aiDelayMs: number, seed = 42) {
+  const base = createRoom({
+    id: "PACE01",
+    passwordHash: "h",
+    salt: "s",
+    seed,
+    now: T0,
+    inviteCodes: ["a", "b", "c", "d"],
+  });
+  const claimed = claimSeat({ ...base, aiDelayMs }, 0, "token", "Kris", T0);
+  assert.ok(claimed.ok);
+  const started = applyTableIntent(claimed.room, { kind: "startMatch" }, T0, mulberry32(4));
+  assert.ok(started.ok);
+  return started.room;
+}
+
+test("with no pace set the AI still resolves every waiting seat at once", () => {
+  const room = pacedRoom(0);
+  assert.equal(room.nextAiAt, null);
+  // Either the human is on turn, or the round is over; no AI seat is left waiting.
+  assert.ok(room.state.turn === 0 || room.state.finished);
+});
+
+test("a pace makes the AI play one seat at a time, on the clock", () => {
+  const room = pacedRoom(2000);
+  // Starting the match arms the clock rather than playing the openers out.
+  if (room.state.turn !== 0) {
+    assert.equal(room.nextAiAt, T0 + 2000);
+    const plays = room.state.history.length;
+
+    // Too early: nothing moves.
+    const early = advanceAutomatedSeats(room, T0 + 1999, mulberry32(5));
+    assert.equal(early.state.history.length, plays);
+
+    // Due: exactly one seat plays, and the clock re-arms for the next.
+    const due = advanceAutomatedSeats(room, T0 + 2000, mulberry32(5));
+    assert.equal(due.state.history.length + due.state.log.length > plays, true);
+    assert.notEqual(due.state.turn, room.state.turn, "the turn moved on by one seat");
+    if (due.state.turn !== 0 && !due.state.finished) {
+      assert.equal(due.nextAiAt, T0 + 4000, "the next play is one pace later");
+    }
+  }
+});
+
+test("aiPlayDue only reports a paced seat whose turn has come round", () => {
+  const instant = pacedRoom(0);
+  assert.equal(aiPlayDue(instant, T0 + 10_000), false, "nothing is pending without a pace");
+
+  const paced = pacedRoom(2000);
+  if (paced.state.turn !== 0) {
+    assert.equal(aiPlayDue(paced, T0 + 1000), false);
+    assert.equal(aiPlayDue(paced, T0 + 2000), true);
+  }
+  // A human's turn is never due, however long it has been.
+  const humanTurn = { ...paced, state: { ...paced.state, turn: 0 } };
+  assert.equal(aiPlayDue(humanTurn, T0 + 60_000), false);
+});
+
+test("the clock clears once the turn comes back to a human", () => {
+  let room = pacedRoom(1000);
+  let guard = 0;
+  while (room.state.turn !== 0 && !room.state.finished && guard++ < 20) {
+    room = advanceAutomatedSeats(room, T0 + guard * 1000 + 1000, mulberry32(9));
+  }
+  if (!room.state.finished) {
+    assert.equal(room.state.turn, 0);
+    assert.equal(room.nextAiAt, null, "no play is pending while a human is thinking");
+  }
+});
+
+test("the table can set the pace, and out-of-range values are refused", () => {
+  const room = pacedRoom(0);
+  const set = applyTableIntent(room, { kind: "setAiDelay", aiDelayMs: 2500 }, T0);
+  assert.ok(set.ok);
+  assert.equal(set.room.aiDelayMs, 2500);
+
+  for (const bad of [-1, 10_001, 1.5, Number.NaN]) {
+    const result = applyTableIntent(room, { kind: "setAiDelay", aiDelayMs: bad }, T0);
+    assert.equal(result.ok, false, String(bad));
+  }
+});
+
+/* ---------------------------------------------------------------------- */
+/* Renaming a seat                                                         */
+/* ---------------------------------------------------------------------- */
+
+test("a seated player can rename their seat without touching anything else", () => {
+  const room = pacedRoom(0);
+  const before = room.seats[0];
+  const renamed = renameSeat(room, 0, "  Kristopher  ", T0 + 5);
+  assert.ok(renamed.ok);
+  assert.equal(renamed.room.seats[0].name, "Kristopher", "trimmed");
+  assert.equal(renamed.room.state.players[0].name, "Kristopher", "the table sees it too");
+  assert.equal(renamed.room.seats[0].tokenHash, before.tokenHash, "seat token is untouched");
+  assert.equal(renamed.room.seats[0].inviteCode, before.inviteCode, "invite code is untouched");
+  assert.equal(renamed.room.state.turn, room.state.turn, "play is undisturbed");
+  assert.equal(renamed.room.version, room.version + 1);
+});
+
+test("a name is capped, required, and only for a real seat", () => {
+  const room = pacedRoom(0);
+  const long = renameSeat(room, 0, "x".repeat(40), T0);
+  assert.ok(long.ok);
+  assert.equal(long.room.seats[0].name.length, 16);
+
+  for (const bad of ["", "   "]) {
+    const result = renameSeat(room, 0, bad, T0);
+    assert.equal(result.ok, false);
+  }
+  for (const seat of [-1, 4, 1.5]) {
+    const result = renameSeat(room, seat, "Kris", T0);
+    assert.equal(result.ok, false);
+  }
+});
+
+test("renaming to the same name is a no-op, so it does not wake every client", () => {
+  const room = pacedRoom(0);
+  const same = renameSeat(room, 0, "Kris", T0 + 10);
+  assert.ok(same.ok);
+  assert.equal(same.room.version, room.version, "no version bump, no poll storm");
 });
