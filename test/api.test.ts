@@ -8,6 +8,7 @@ import {
   leaveSeatEndpoint,
   inviteEndpoint,
   moveEndpoint,
+  renameEndpoint,
   releaseTableEndpoint,
   seatCookieName,
   stateEndpoint,
@@ -570,4 +571,69 @@ test("only the table display may retune the opponents", async () => {
     roomId,
   );
   assert.equal(response.status, 403);
+});
+
+test("a paced AI play is carried forward by the version poll, version and all", async () => {
+  freshStore();
+  const roomId = await newRoom();
+  const { who } = await seatedClient(roomId, 0, "Kris");
+  const tablet = client();
+  absorb(tablet, await claimTableEndpoint(post("/x", { password: "letmein" }, tablet), roomId));
+  await controlEndpoint(post("/x", { action: "setAiDelay", aiDelayMs: 40 }, tablet), roomId);
+  await controlEndpoint(post("/x", { action: "startMatch" }, tablet), roomId);
+
+  const read = async () =>
+    (await (await versionEndpoint(request("GET", "/x", undefined, who), roomId)).json()) as {
+      version: number;
+      turn: number;
+      finished: boolean;
+    };
+
+  // Get the turn onto an AI seat, playing the human's opener if it is theirs.
+  let view = (await (await stateEndpoint(request("GET", "/x", undefined, who), roomId)).json()) as PublicRoom;
+  if (view.turn === 0) {
+    const opener = view.seats[0].hand!.find((c) => c.id === "3D") ?? view.seats[0].hand![0];
+    await moveEndpoint(post("/x", { action: "play", cardIds: [opener.id] }, who), roomId);
+    view = (await (await stateEndpoint(request("GET", "/x", undefined, who), roomId)).json()) as PublicRoom;
+  }
+  if (view.turn === 0 || view.finished) return; // nothing paced to observe
+
+  const before = await read();
+  // Too early for the next play: the poll changes nothing.
+  const immediate = await read();
+  assert.equal(immediate.version, before.version, "nothing moves before the pace elapses");
+
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  const after = await read();
+  assert.equal(after.version, before.version + 1, "one play, and the version moved with it");
+  assert.notEqual(after.turn, before.turn, "the turn advanced by exactly one seat");
+});
+
+test("with no pace the AI resolves without waiting for a poll", async () => {
+  freshStore();
+  const roomId = await newRoom();
+  const { who } = await seatedClient(roomId, 0, "Kris");
+  const tablet = client();
+  absorb(tablet, await claimTableEndpoint(post("/x", { password: "letmein" }, tablet), roomId));
+  await controlEndpoint(post("/x", { action: "startMatch" }, tablet), roomId);
+
+  const view = (await (await stateEndpoint(request("GET", "/x", undefined, who), roomId)).json()) as PublicRoom;
+  assert.equal(view.aiDelayMs, 0);
+  // Either it is the human's turn or the round is done: no AI seat is left waiting.
+  assert.ok(view.turn === 0 || view.finished);
+});
+
+test("renaming a seat needs that seat's cookie", async () => {
+  freshStore();
+  const roomId = await newRoom();
+  const { who } = await seatedClient(roomId, 1, "Kris");
+
+  assert.equal((await renameEndpoint(post("/x", { name: "Nobody" }), roomId)).status, 403);
+  assert.equal((await renameEndpoint(post("/x", { name: "" }, who), roomId)).status, 400);
+
+  const ok = await renameEndpoint(post("/x", { name: "Kristopher" }, who), roomId);
+  assert.equal(ok.status, 200);
+  const view = (await ok.json()) as PublicRoom;
+  assert.equal(view.seats[1].name, "Kristopher");
+  assert.equal(view.seat, 1, "you stay in your seat");
 });

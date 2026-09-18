@@ -16,10 +16,12 @@ import {
   createRoom,
   isTableSeatToken,
   publicRoom,
+  renameSeat,
   releaseSeat,
   SEAT_COUNT,
   releaseTableSeat,
   roomVersion,
+  tickAi,
   seatForInvite,
   seatForToken,
   touchSeat,
@@ -235,6 +237,16 @@ export async function versionEndpoint(request: Request, roomId: string): Promise
   if (!room) return jsonError("Room not found.", 404);
 
   const now = Date.now();
+
+  // Paced AI plays have no server of their own to run on, so whoever polls
+  // carries the clock forward. The compare-and-set makes a race between two
+  // pollers harmless: one write lands, the other no-ops.
+  const advanced = tickAi(room, now);
+  if (advanced) {
+    const saved = await getRoomStore().save(advanced, room.version);
+    if (saved === "ok") return json(roomVersion(advanced, now));
+  }
+
   if (await isTableDevice(request, room)) {
     if (now - (room.tableSeat?.lastSeen ?? 0) > PRESENCE_REFRESH_MS) {
       // Presence never changes the version, so this does not wake anyone.
@@ -247,6 +259,27 @@ export async function versionEndpoint(request: Request, roomId: string): Promise
     }
   }
   return json(roomVersion(room, now));
+}
+
+/** Change the name on the seat this request already holds. */
+export async function renameEndpoint(request: Request, roomId: string): Promise<Response> {
+  const body = await readJson<{ name?: unknown }>(request);
+  if (!body) return jsonError("Expected a JSON body.", 400);
+
+  const room = await loadRoom(roomId);
+  if (!room) return jsonError("Room not found.", 404);
+
+  const seat = await seatOf(request, room);
+  if (seat === null) return jsonError("Take a seat before renaming it.", 403);
+
+  const name = typeof body.name === "string" ? body.name : "";
+  const result = renameSeat(room, seat, name);
+  if (!result.ok) return jsonError(result.error, result.status);
+
+  const failure = saveOutcome(await getRoomStore().save(result.room, room.version));
+  if (failure) return failure;
+
+  return json(publicRoom(result.room, seat));
 }
 
 function parseIntent(body: { action?: unknown; cardIds?: unknown }): Intent | null {
@@ -342,6 +375,7 @@ function parseTableIntent(body: {
   action?: unknown;
   seat?: unknown;
   delta?: unknown;
+  aiDelayMs?: unknown;
   aiStyle?: unknown;
 }): TableIntent | null {
   if (body.action === "nextRound") return { kind: "nextRound" };
@@ -351,6 +385,10 @@ function parseTableIntent(body: {
     return { kind: "startMatch", botNames: mechanicalNames(SEAT_COUNT) };
   }
   if (body.action === "resetMatch") return { kind: "resetMatch" };
+  if (body.action === "setAiDelay") {
+    if (typeof body.aiDelayMs !== "number") return null;
+    return { kind: "setAiDelay", aiDelayMs: body.aiDelayMs };
+  }
   if (body.action === "setAiStyle") {
     if (!AI_STYLES.includes(body.aiStyle as AiStyle)) return null;
     return { kind: "setAiStyle", aiStyle: body.aiStyle as AiStyle };
@@ -363,7 +401,13 @@ function parseTableIntent(body: {
 }
 
 export async function controlEndpoint(request: Request, roomId: string): Promise<Response> {
-  const body = await readJson<{ action?: unknown; seat?: unknown; delta?: unknown }>(request);
+  const body = await readJson<{
+    action?: unknown;
+    seat?: unknown;
+    delta?: unknown;
+    aiStyle?: unknown;
+    aiDelayMs?: unknown;
+  }>(request);
   if (!body) return jsonError("Expected a JSON body.", 400);
 
   const room = await loadRoom(roomId);

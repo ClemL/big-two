@@ -31,7 +31,7 @@ client side, so a Vercel deployment is just `next build` plus static hosting.
 
 ```
 app/            App Router entry, global stylesheet, icon
-app/api/        Room routes (create, join, state, version, move)
+app/api/        Room routes (create, join, name, state, version, move, table, control)
 components/     TableView (shared layout), GameTable (single player), OnlineTable,
                 PocketView (phone), TableDisplay + TableSeatGate (tablet),
                 RoomLobby, CreateRoom, ScanJoin (QR landing), QrCode (SVG),
@@ -116,6 +116,10 @@ update `test/` and the in-app rules panel in the same commit.
   independent decoder. Both bugs it found — a BCH remainder that never
   converged, and alignment patterns dropped where their centre crossed a timing
   pattern — produced codes that looked plausible and scanned nowhere.
+* **Paced AI plays are carried by whoever polls, and every carried play bumps the version.**
+  There is no server loop: `tickAi` runs from the version endpoint. Saving an advanced room without
+  a version bump makes the play invisible, because clients only refetch state when the version
+  moves — the first cut of this shipped that bug and the turn changed under a frozen version.
 * **Room writes are compare-and-set on the version.** Requests interleave across serverless
   instances, so an unconditional write silently drops concurrent moves.
 

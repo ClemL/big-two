@@ -1,7 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { CardCount } from "@/components/CardCount";
+import { CardView } from "@/components/CardView";
 import { HandView } from "@/components/HandView";
 import type { Card } from "@/lib/cards";
 import type { HandLayout } from "@/lib/handSettings";
@@ -20,6 +21,9 @@ import { comboName } from "@/lib/combos";
 export function PocketView({
   roomLabel,
   seatLabel,
+  seatName,
+  onRename,
+  justPlayed,
   status,
   message,
   toBeat,
@@ -36,6 +40,11 @@ export function PocketView({
 }: {
   roomLabel: string;
   seatLabel: string;
+  /** Your current name, for the rename field. */
+  seatName: string;
+  onRename: (name: string) => void;
+  /** The cards you last sent, shown briefly on their way to the table. */
+  justPlayed: Card[] | null;
   status: string;
   message?: string | null;
   toBeat: Combo | null;
@@ -54,7 +63,7 @@ export function PocketView({
   return (
     <main className="app pocket">
       <header className="pocket__bar">
-        <span className="pocket__seat">{seatLabel}</span>
+        <SeatName label={seatLabel} name={seatName} onRename={onRename} />
         <span className="pocket__room">{roomLabel}</span>
       </header>
 
@@ -94,8 +103,91 @@ export function PocketView({
         onToggleCard={onToggleCard}
       />
 
+      {justPlayed ? (
+        /* Keyed on the cards so replaying the same shape restarts the flight. */
+        <div className="pocket__sent" key={justPlayed.map((c) => c.id).join("-")} aria-hidden="true">
+          {justPlayed.map((card, i) => (
+            <CardView key={card.id} card={card} index={i} />
+          ))}
+        </div>
+      ) : null}
+
       <section className="actions actions--pocket">{actions}</section>
       {overlay}
     </main>
+  );
+}
+
+
+/**
+ * Your seat name, tappable to change it.
+ *
+ * On a phone there is nowhere else to put this: the lobby is behind you once
+ * you are seated, and the name is what everyone else sees on the table.
+ */
+function SeatName({
+  label,
+  name,
+  onRename,
+}: {
+  label: string;
+  name: string;
+  onRename: (name: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(name);
+  const input = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing) input.current?.select();
+  }, [editing]);
+
+  const commit = () => {
+    setEditing(false);
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== name) onRename(trimmed);
+    else setDraft(name);
+  };
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        className="pocket__seat"
+        onClick={() => {
+          setDraft(name);
+          setEditing(true);
+        }}
+        title="Change your name"
+      >
+        {label}
+        <span className="pocket__seat-edit" aria-hidden="true">
+          ✎
+        </span>
+      </button>
+    );
+  }
+
+  return (
+    <span className="pocket__rename">
+      <input
+        ref={input}
+        value={draft}
+        maxLength={16}
+        aria-label="Your name"
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+          if (e.key === "Escape") {
+            setDraft(name);
+            setEditing(false);
+          }
+        }}
+        onBlur={commit}
+      />
+      <button type="button" className="btn btn--tiny" onMouseDown={(e) => e.preventDefault()} onClick={commit}>
+        Save
+      </button>
+    </span>
   );
 }

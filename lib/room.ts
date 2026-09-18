@@ -80,6 +80,17 @@ export interface Room {
   startedAt: number | null;
   state: GameState;
   aiStyle: AiStyle;
+  /**
+   * How long to wait between AI plays, in milliseconds. Zero plays them all
+   * out in the request that triggered them, which is instant but means a whole
+   * round of opponents can resolve between two polls — nothing to watch.
+   */
+  aiDelayMs: number;
+  /**
+   * When the next paced AI play becomes due. Null when no AI seat is waiting.
+   * Polls carry the clock forward, so the pacing needs someone watching.
+   */
+  nextAiAt: number | null;
   createdAt: number;
   updatedAt: number;
 }
@@ -96,6 +107,7 @@ export interface CreateRoomOptions {
   salt: string;
   seed?: number;
   aiStyle?: AiStyle;
+  aiDelayMs?: number;
   now?: number;
   /**
    * One per seat. Passed in rather than generated here for the same reason the
@@ -122,6 +134,10 @@ export function createRoom(options: CreateRoomOptions): Room {
     startedAt: null,
     state: startRound({ seed: options.seed, names: DEFAULT_SEAT_NAMES }),
     aiStyle: options.aiStyle ?? "weakest",
+    // Instant by default, so nothing changes for anyone who has not asked for
+    // pacing; the table display turns it on.
+    aiDelayMs: options.aiDelayMs ?? 0,
+    nextAiAt: null,
     createdAt: now,
     updatedAt: now,
   };
@@ -207,6 +223,31 @@ export function claimSeatByInvite(
   return claimSeat(room, seat, tokenHash, name, now);
 }
 
+/**
+ * Change the name on a seat you already hold.
+ *
+ * Separate from claiming: renaming must not need the password again, and must
+ * not disturb the seat token, the invite code or whose turn it is.
+ */
+export function renameSeat(room: Room, index: number, name: string, now = Date.now()): RoomResult {
+  if (!Number.isInteger(index) || index < 0 || index >= SEAT_COUNT) {
+    return { ok: false, error: "No such seat.", status: 400 };
+  }
+  const trimmed = name.trim().slice(0, 16);
+  if (trimmed.length === 0) {
+    return { ok: false, error: "Pick a name.", status: 400 };
+  }
+  if (trimmed === room.seats[index].name) return { ok: true, room };
+
+  const seats = room.seats.slice();
+  seats[index] = { ...seats[index], name: trimmed, lastSeen: now };
+  const state = {
+    ...room.state,
+    players: room.state.players.map((p) => (p.index === index ? { ...p, name: trimmed } : p)),
+  };
+  return { ok: true, room: bump({ ...room, seats, state }, now) };
+}
+
 export function releaseSeat(room: Room, index: number, now = Date.now(), inviteCode?: string): Room {
   const seats = room.seats.slice();
   seats[index] = {
@@ -272,6 +313,7 @@ export type TableIntent =
   | { kind: "nextRound" }
   | { kind: "resetMatch"; inviteCodes?: string[] }
   | { kind: "setAiStyle"; aiStyle: AiStyle }
+  | { kind: "setAiDelay"; aiDelayMs: number }
   | { kind: "adjustScore"; seat: number; delta: number };
 
 export function applyTableIntent(
@@ -290,6 +332,17 @@ export function applyTableIntent(
     // Takes effect from the next AI turn; the hands already dealt stand, so
     // changing this mid-round retunes the opponents without resetting play.
     const next = { ...touched, aiStyle: intent.aiStyle };
+    return { ok: true, room: bump(advanceAutomatedSeats(next, now, rng), now) };
+  }
+
+  if (intent.kind === "setAiDelay") {
+    const delay = intent.aiDelayMs;
+    if (!Number.isFinite(delay) || !Number.isInteger(delay) || delay < 0 || delay > 10_000) {
+      return { ok: false, error: "Pace out of range.", status: 400 };
+    }
+    // Clearing the clock lets a change take effect on the next tick rather
+    // than leaving a play pending against the old pace.
+    const next = { ...touched, aiDelayMs: delay, nextAiAt: null };
     return { ok: true, room: bump(advanceAutomatedSeats(next, now, rng), now) };
   }
 
@@ -381,19 +434,71 @@ export type Intent =
  * Only runs while at least one human is seated: an empty room should sit
  * waiting for players, not deal rounds to itself forever.
  */
+/**
+ * Play out the seats the AI is covering.
+ *
+ * With `aiDelayMs` at zero this resolves every waiting AI seat in one go, which
+ * is the original behaviour. With a delay set it plays at most one seat per
+ * call and only once that seat's turn is due, so each play lands as its own
+ * version bump and every client gets to watch it arrive. The clock is carried
+ * forward by whoever polls next, which is safe because nothing advances at all
+ * unless a human is still at the table.
+ */
 export function advanceAutomatedSeats(room: Room, now = Date.now(), rng = Math.random): Room {
   // Nothing moves in the lobby: that is the whole point of having one.
   if (room.phase !== "playing") return room;
   if (activeSeats(room, now).length === 0) return room;
+
+  const paced = room.aiDelayMs > 0;
   let state = room.state;
+  let nextAiAt = room.nextAiAt;
   let guard = 0;
+
   while (!state.finished && seatIsAutomated(room, state.turn, now)) {
     if (guard++ > 200) break;
+    if (paced) {
+      // Arm the clock the first time an AI seat is on turn, then wait it out.
+      if (nextAiAt === null) {
+        nextAiAt = now + room.aiDelayMs;
+        break;
+      }
+      if (now < nextAiAt) break;
+    }
     const actor = state.turn;
     const move = chooseMove(state, actor, room.aiStyle, rng);
     state = move ? applyPlay(state, actor, move.cards) : applyPass(state, actor);
+    if (paced) {
+      nextAiAt = now + room.aiDelayMs;
+      break;
+    }
   }
-  return state === room.state ? room : { ...room, state };
+
+  const stillWaiting = paced && !state.finished && seatIsAutomated(room, state.turn, now);
+  if (!stillWaiting) nextAiAt = null;
+
+  if (state === room.state && nextAiAt === room.nextAiAt) return room;
+  return { ...room, state, nextAiAt };
+}
+
+/**
+ * Carry a due AI play forward, or null when nothing is owed.
+ *
+ * Bumping the version is the whole point: clients poll the version and only
+ * refetch state when it moves, so an AI play saved without one is invisible.
+ */
+export function tickAi(room: Room, now = Date.now(), rng = Math.random): Room | null {
+  if (!aiPlayDue(room, now)) return null;
+  const advanced = advanceAutomatedSeats(room, now, rng);
+  if (advanced === room) return null;
+  return bump(advanced, now);
+}
+
+/** True when a paced AI play is due and a poll should carry it forward. */
+export function aiPlayDue(room: Room, now = Date.now()): boolean {
+  if (room.phase !== "playing" || room.aiDelayMs <= 0) return false;
+  if (room.state.finished || room.nextAiAt === null) return false;
+  if (!seatIsAutomated(room, room.state.turn, now)) return false;
+  return now >= room.nextAiAt;
 }
 
 function cardsFromIds(state: GameState, seat: number, cardIds: readonly string[]): Card[] | null {
@@ -510,6 +615,8 @@ export interface PublicRoom {
   roundNumber: number;
   log: GameState["log"];
   aiStyle: AiStyle;
+  /** Pause between AI plays, in milliseconds. Zero resolves them instantly. */
+  aiDelayMs: number;
   /** Legal moves are computed client side from the hand; this is a courtesy. */
   yourTurn: boolean;
 }
@@ -557,6 +664,7 @@ export function publicRoom(
     roundNumber: state.roundNumber,
     log: state.log,
     aiStyle: room.aiStyle,
+    aiDelayMs: room.aiDelayMs,
     yourTurn: seat !== null && !state.finished && state.turn === seat,
   };
 }
