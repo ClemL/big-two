@@ -59,3 +59,5 @@
 2026-09-17T09:00:00Z - On the table display a play now flies in from the seat that sent it, slowly enough to follow.
 2026-09-17T09:00:00Z - Held in portrait, the table shows the hand to beat and the one play before it.
 2026-09-17T09:00:00Z - The table can set an AI pace, so opponents play one at a time with a few seconds to watch each play land.
+2026-09-18T09:00:00Z - Opponents now default to Competitive, in single player and in a new room.
+2026-09-18T09:00:00Z - AI plays are half again slower — 1.5 seconds apart at a table, 1125ms in single player — so you can see what was played.

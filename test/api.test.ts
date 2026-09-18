@@ -609,12 +609,31 @@ test("a paced AI play is carried forward by the version poll, version and all", 
   assert.notEqual(after.turn, before.turn, "the turn advanced by exactly one seat");
 });
 
-test("with no pace the AI resolves without waiting for a poll", async () => {
+test("a new room defaults to competitive opponents at a readable pace", async () => {
+  freshStore();
+  const roomId = await newRoom();
+  const { view } = await seatedClient(roomId, 0, "Kris");
+  assert.equal(view.aiStyle, "strategist");
+  assert.equal(view.aiDelayMs, 1500, "instant would resolve a row of opponents between two polls");
+});
+
+test("a caller can still ask for a different style", async () => {
+  freshStore();
+  const response = await createRoomEndpoint(
+    post("/api/rooms", { password: "letmein", aiStyle: "weakest" }),
+  );
+  const { id } = (await response.json()) as { id: string };
+  const { view } = await seatedClient(id, 0, "Kris");
+  assert.equal(view.aiStyle, "weakest");
+});
+
+test("with the pace turned off the AI resolves without waiting for a poll", async () => {
   freshStore();
   const roomId = await newRoom();
   const { who } = await seatedClient(roomId, 0, "Kris");
   const tablet = client();
   absorb(tablet, await claimTableEndpoint(post("/x", { password: "letmein" }, tablet), roomId));
+  await controlEndpoint(post("/x", { action: "setAiDelay", aiDelayMs: 0 }, tablet), roomId);
   await controlEndpoint(post("/x", { action: "startMatch" }, tablet), roomId);
 
   const view = (await (await stateEndpoint(request("GET", "/x", undefined, who), roomId)).json()) as PublicRoom;
