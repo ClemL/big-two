@@ -370,6 +370,14 @@ seated, and the name is what everyone else reads on the table, so it needs to be
 reachable from the one screen a player keeps. Renaming needs your seat cookie,
 not the password, and leaves the seat token, invite code and turn order alone.
 
+### Leaving the table
+
+A play does not vanish when the next one lands, and a swept table does not
+simply empty: the cards travel to the history strip over about a second, slowly
+enough to follow from across a table. The distance is measured at run time
+rather than guessed, because the strip sits somewhere different in the edges and
+corners layouts, and again in portrait.
+
 ### Held upright
 
 In portrait there is no width for a trick strip beside the pile, so the table

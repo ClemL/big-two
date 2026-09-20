@@ -171,6 +171,14 @@ almost nowhere else.
   `@media (hover: hover) and (pointer: fine)` because hover latches after a tap on a touchscreen.
 * Nothing in the hand may take a `z-index` above its neighbours. Raising a chosen card also raises
   its hit area over the next card's, which on a fanned hand makes that card untappable.
+* A scale token only works if everything it should scale is expressed in terms of it. `--table-font`
+  did nothing for two releases because every font size inside the display was in `px`, which ignores
+  the container's `font-size`. Table chrome now uses `calc(Npx * var(--table-font))`; card internals
+  are deliberately excluded, since cards are sized by `--card-w`/`--card-h`.
+* Density on the table display must move the cards, not just the padding — a few pixels of spacing is
+  a change nobody notices from across a table. It also must not be overridden downstream: setting
+  `--card-w` on `.table-display__cards .card` made Roomy, Normal and Compact render identically, and
+  the corners layout pinned its seat padding to a constant for the same reason.
 * Card size lives in three `:root` variables — `--card-w`, `--card-h`, `--hand-overlap`. The hand is
   one non-wrapping overlapping row; a context that needs a different size sets the variables rather
   than adding rules. Media queries that change them must come after the wider ones, since they share

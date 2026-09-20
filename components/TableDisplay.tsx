@@ -37,6 +37,20 @@ const POLL_MS = 2000;
 /** Where each seat sits around the tablet, and how its plays fly in. */
 const EDGE = ["table-seat--bottom", "table-seat--left", "table-seat--top", "table-seat--right"];
 
+/** How long a leaving pile takes to reach the history strip. */
+const OUTGOING_MS = 900;
+
+interface OutgoingPlay {
+  key: string;
+  play: NonNullable<PublicRoom["table"]>;
+  dx: number;
+  dy: number;
+}
+
+function sameCards(a: readonly { id: string }[], b: readonly { id: string }[]): boolean {
+  return a.length === b.length && a.every((card, i) => card.id === b[i].id);
+}
+
 /** Pacing presets, in milliseconds between AI plays. */
 const AI_PACES = [
   { ms: 0, label: "Instant" },
@@ -222,6 +236,42 @@ export function TableDisplay({
     </>
   );
 
+  // The pile that is leaving, held for the length of its journey to the
+  // history strip. Without this React unmounts it the instant a new play
+  // lands and the old one simply disappears.
+  const pileRef = useRef<HTMLDivElement>(null);
+  const historyRef = useRef<HTMLDivElement>(null);
+  const [outgoing, setOutgoing] = useState<OutgoingPlay | null>(null);
+  const lastTable = useRef<PublicRoom["table"]>(room.table);
+
+  useEffect(() => {
+    const previous = lastTable.current;
+    lastTable.current = room.table;
+    if (!previous) return;
+    if (room.table && sameCards(previous.combo.cards, room.table.combo.cards)) return;
+
+    // Measured rather than guessed: the strip sits in a different place in
+    // each layout, and in portrait it moves again.
+    const from = pileRef.current?.getBoundingClientRect();
+    const to = historyRef.current?.getBoundingClientRect();
+    if (!from || from.width === 0) return;
+    // The strip is in the DOM but empty before the first play lands, so an
+    // empty rect still gives the right direction to travel in.
+    const target = to && to.width > 0 ? to : { left: from.left - from.width, top: from.top, height: from.height };
+    setOutgoing({
+      key: previous.combo.cards.map((c) => c.id).join("-"),
+      play: previous,
+      dx: Math.round(target.left + 40 - (from.left + from.width / 2)),
+      dy: Math.round(target.top + target.height / 2 - (from.top + from.height / 2)),
+    });
+  }, [room.table]);
+
+  useEffect(() => {
+    if (!outgoing) return;
+    const timer = setTimeout(() => setOutgoing(null), OUTGOING_MS);
+    return () => clearTimeout(timer);
+  }, [outgoing]);
+
   const table = room.table;
   // The plays before the current one, most recent first. History outlives the
   // trick, so a swept table can still be read.
@@ -236,7 +286,7 @@ export function TableDisplay({
       data-table-theme={settings.theme}
       style={
         {
-          "--table-font": settings.fontScale,
+          "--table-font-base": settings.fontScale,
           "--qr-scale": settings.qrScale,
         } as React.CSSProperties
       }
@@ -286,7 +336,7 @@ export function TableDisplay({
             onClick={() => setShowCodes((v) => !v)}
             aria-pressed={showCodes}
           >
-            {showCodes ? "Hide codes" : "Show codes"}
+            {showCodes ? "Hide join info" : "Show join info"}
           </button>
           <button
             type="button"
@@ -314,7 +364,7 @@ export function TableDisplay({
         </div>
       </header>
 
-      {password ? (
+      {password && showCodes ? (
         <div className="table-pass">
           <span className="table-pass__label">Table password</span>
           {showPassword ? <code className="table-pass__value">{password}</code> : null}
@@ -340,7 +390,7 @@ export function TableDisplay({
               room.turn === seat.index && !room.finished && !waiting ? "is-turn" : ""
             } ${room.winner === seat.index ? "is-winner" : ""}`}
           >
-            <div className="table-seat__number">Seat {seat.index + 1}</div>
+            {showCodes ? <div className="table-seat__number">Seat {seat.index + 1}</div> : null}
             <div className="table-seat__name">
               {/* A seat nobody named keeps the default "Seat N", which would
                   just repeat the number above it. */}
@@ -408,7 +458,7 @@ export function TableDisplay({
         ))}
 
         <div className="table-display__middle">
-          <div className="table-display__past" aria-label="Recent plays">
+          <div className="table-display__past" aria-label="Recent plays" ref={historyRef}>
             {waiting || previous.length === 0
               ? null
               : previous.map((play, i) => (
@@ -427,7 +477,7 @@ export function TableDisplay({
                 ))}
           </div>
 
-        <div className="table-display__pile">
+        <div className="table-display__pile" ref={pileRef}>
           {waiting ? (
             <div className="pile__empty">
               Scan a seat to join
@@ -453,6 +503,24 @@ export function TableDisplay({
               <span>{room.seats[room.leader].name} leads</span>
             </div>
           )}
+
+          {outgoing ? (
+            <div
+              className="table-display__outgoing"
+              key={outgoing.key}
+              aria-hidden="true"
+              style={
+                {
+                  "--to-x": `${outgoing.dx}px`,
+                  "--to-y": `${outgoing.dy}px`,
+                } as React.CSSProperties
+              }
+            >
+              {outgoing.play.combo.cards.map((card, i) => (
+                <CardView key={card.id} card={card} index={i} />
+              ))}
+            </div>
+          ) : null}
         </div>
         </div>
       </div>

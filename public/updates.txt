@@ -61,3 +61,8 @@
 2026-09-17T09:00:00Z - The table can set an AI pace, so opponents play one at a time with a few seconds to watch each play land.
 2026-09-18T09:00:00Z - Opponents now default to Competitive, in single player and in a new room.
 2026-09-18T09:00:00Z - AI plays are half again slower — 1.5 seconds apart at a table, 1125ms in single player — so you can see what was played.
+2026-09-20T09:00:00Z - Hiding the join info on the table now hides the QR codes, the table password and the seat numbers together.
+2026-09-20T09:00:00Z - The display settings dialog no longer scrolls sideways.
+2026-09-20T09:00:00Z - The text size slider now actually resizes the table — every size inside it was fixed in pixels before.
+2026-09-20T09:00:00Z - Roomy, Normal and Compact now change the card size and text as well as the spacing, in both seat layouts.
+2026-09-20T09:00:00Z - When a play lands, the previous one slides across to the history strip, and a swept table sends its cards the same way.
