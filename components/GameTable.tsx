@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Modal } from "@/components/Modal";
 import { RulesPanel } from "@/components/RulesPanel";
+import { Explainer } from "@/components/Explainer";
 import { RoundSummary, TableView, type OpponentSeat, type PreviousPlay } from "@/components/TableView";
 import {
   useAutoHint,
@@ -237,6 +238,14 @@ export default function GameTable() {
             </button>
             <RulesPanel />
           </div>
+        </section>
+
+        <section className="start__panel start__panel--film">
+          <h2>Never played? Watch first</h2>
+          <p className="lobby__hint">
+            Three and a half minutes, hand drawn, no sound — the subtitles carry it.
+          </p>
+          <Explainer />
         </section>
 
         <section className="start__panel start__panel--table">

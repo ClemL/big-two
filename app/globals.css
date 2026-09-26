@@ -1942,3 +1942,225 @@ body {
     transform: translateX(22px) scale(0.86);
   }
 }
+
+/* ---------- the explainer film ---------- */
+/* The film is a canvas on paper stock, so its chrome stays out of the way:
+   ink-coloured text on the page's felt, and no frame round the sheet itself. */
+
+.start__panel--film {
+  align-self: stretch;
+  width: 100%;
+  align-items: stretch;
+  background: rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.film {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+}
+.film__stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #efe4cf;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.36);
+  line-height: 0;
+}
+.film__stage:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+.film__canvas {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  touch-action: manipulation;
+}
+.film__poster,
+.film__resume {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  color: #2a2320;
+  background: linear-gradient(to top, rgba(239, 228, 207, 0.86), rgba(239, 228, 207, 0.1) 55%);
+  touch-action: manipulation;
+}
+/* A paused frame is something to look at, so the resume badge sits out of the
+   middle of the picture while the whole sheet stays clickable. */
+.film__resume {
+  background: rgba(239, 228, 207, 0.12);
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 18px;
+}
+.film__posterBadge,
+.film__resume > span {
+  display: grid;
+  place-items: center;
+  width: 74px;
+  height: 74px;
+  border-radius: 50%;
+  background: var(--danger);
+  color: #fff7ea;
+  font-size: 28px;
+  padding-left: 4px;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.32);
+}
+.film__resume > span {
+  width: 62px;
+  height: 62px;
+  font-size: 24px;
+  opacity: 0.9;
+}
+.film__posterText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  line-height: 1.3;
+  text-align: left;
+  max-width: 24ch;
+}
+.film__posterText strong {
+  font-size: 20px;
+}
+.film__posterText span {
+  font-size: 14px;
+  color: #5c5149;
+}
+/* The caption box is a fixed height: subtitles that resize the page as they
+   change drag the Play button up and down under the reader's cursor. */
+.film__captions {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+}
+.film__caption {
+  margin: 0;
+  text-align: center;
+  font-size: 17px;
+  line-height: 1.35;
+  color: var(--ink);
+  max-width: 62ch;
+}
+.film__controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.film__scrub {
+  flex: 1 1 160px;
+  min-width: 120px;
+  accent-color: var(--accent);
+  touch-action: manipulation;
+}
+.film__time {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--muted);
+}
+.btn--small {
+  padding: 6px 12px;
+  font-size: 14px;
+}
+.film__chapters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.film__chapter {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.film__chapter--now {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+.film__chapterTime {
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  opacity: 0.7;
+}
+/* Full screen is where the film is legible on a phone, so the whole component
+   goes — captions and controls included, not just the sheet. */
+.film:fullscreen {
+  background: var(--felt);
+  padding: 14px;
+  justify-content: center;
+}
+.film:fullscreen .film__stage {
+  width: auto;
+  height: min(74vh, calc((100vw - 28px) * 0.5625));
+  margin: 0 auto;
+}
+.film:fullscreen .film__transcript,
+.film:fullscreen .film__chapters {
+  display: none;
+}
+.film__transcript {
+  font-size: 14px;
+  color: var(--muted);
+}
+.film__transcript summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+.film__transcriptChapter {
+  margin: 10px 0;
+}
+.film__transcriptChapter h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.film__transcriptChapter p {
+  margin: 0 0 4px;
+  line-height: 1.4;
+}
+@media (hover: hover) and (pointer: fine) {
+  .film__chapter:hover {
+    border-color: var(--accent);
+    color: var(--ink);
+  }
+  .film__poster:hover .film__posterBadge,
+  .film__resume:hover > span {
+    transform: scale(1.06);
+  }
+}
+@media (max-width: 720px) {
+  .film__posterText {
+    display: none;
+  }
+  .film__caption {
+    font-size: 15px;
+  }
+  .film__captions {
+    min-height: 66px;
+  }
+}

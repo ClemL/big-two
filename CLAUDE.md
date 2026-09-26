@@ -35,7 +35,11 @@ app/api/        Room routes (create, join, name, state, version, move, table, co
 components/     TableView (shared layout), GameTable (single player), OnlineTable,
                 PocketView (phone), TableDisplay + TableSeatGate (tablet),
                 RoomLobby, CreateRoom, ScanJoin (QR landing), QrCode (SVG),
-                CardView, CardFace (SVG deck), RulesPanel, Modal, BuildFooter
+                CardView, CardFace (SVG deck), RulesPanel, Modal, BuildFooter,
+                Explainer (the how-to-play film)
+lib/explainer/  ink (hand-drawn primitives, stroke font), props (cards, felt,
+                phones, marks), scenes (the eleven chapters), film (timeline,
+                paper stock, renderFrame)
 lib/cards.ts    Deck, rank/suit ordering, seeded shuffle and deal
 lib/combos.ts   Combination detection, comparison, legal move generation
 lib/engine.ts   Round state machine: play, pass, trick clearing, round end
@@ -197,7 +201,26 @@ almost nowhere else.
   should collapse out has to be kept in the render for the length of its animation.
 * Shared client behaviour lives in `components/hooks.ts` — turn signals, keyboard shortcuts, the
   auto-pass timer. Both tables use them, so a change lands in both.
+* The explainer film in `lib/explainer/` is drawn, not filmed: no video, no images, no fonts. A
+  scene is a pure function of its own elapsed time and `renderFrame(ctx, t, w, h)` draws second `t`
+  and nothing else, which is what makes scrubbing, pausing and the poster frame the same operation —
+  and what lets `test/explainer.test.ts` render the whole timeline into a recording stub. Keep it
+  that way: no state may accumulate between frames.
+* **Ink composes the ambient alpha, it does not set it.** `stroke`, `fill` and every prop multiply
+  `ctx.globalAlpha` rather than assigning it. The first cut assigned, so every `ctx.globalAlpha = a`
+  a scene set round a group did nothing and panels that should have faded out stayed on the paper
+  through the next beat. A test pins the composition.
 * Sound is synthesized in `lib/sound.ts`; do not add audio files. Browsers block audio until a user
   gesture, so `unlock()` runs on the first pointer or key event and `play()` is a no-op before that.
   Game events are turned into sound in one place — the effect in `GameTable` that walks new
   `state.log` entries — so a new game event only needs a log entry and a recipe.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
