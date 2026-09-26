@@ -68,3 +68,4 @@
 2026-09-20T09:00:00Z - When a play lands, the previous one slides across to the history strip, and a swept table sends its cards the same way.
 2026-09-26T12:00:00Z - New here? A three minute fifty hand-drawn film on the start screen teaches the whole game, with subtitles and no sound.
 2026-09-26T12:00:00Z - The film has chapters, a scrubber, a subtitle toggle, a full-screen button and a written transcript.
+2026-09-26T18:00:00Z - The how-to-play film on the start screen can be closed, and Settings brings it back.

@@ -157,9 +157,8 @@ const title: Scene = {
   title: "Big Two",
   duration: 14,
   captions: [
-    { at: 0.3, text: "Big Two — 鋤大弟 — played by Hong Kong rules." },
-    { at: 4.6, text: "Four players. Thirteen cards each. No bidding, no trumps, no partners." },
-    { at: 9.4, text: "Empty your hand before anyone else and you win the round." },
+    { at: 0.3, text: "Four players. Thirteen cards each. No bidding, no trumps, no partners." },
+    { at: 7.0, text: "Empty your hand before anyone else and you win the round." },
   ],
   draw(ctx, t) {
     // Cards drop in from above the paper and settle into a spread.
