@@ -57,6 +57,13 @@ body {
   font-size: 18px;
   color: var(--accent);
 }
+.start__panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  align-self: stretch;
+}
 .start__panel--table {
   background: rgba(224, 182, 66, 0.12);
   border-color: rgba(224, 182, 66, 0.45);

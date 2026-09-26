@@ -298,3 +298,34 @@ export function useHandLayout(): [HandLayout, (next: HandLayout) => void] {
 
   return [layout, choose];
 }
+
+const FILM_HIDDEN_KEY = "bigtwo.filmHidden";
+
+/**
+ * Whether the start screen shows the explainer film. Starts shown so a first
+ * visit gets it; a player who has closed it keeps it closed until Settings
+ * brings it back.
+ */
+export function useFilmVisible(): [boolean, (next: boolean) => void] {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    try {
+      setVisible(localStorage.getItem(FILM_HIDDEN_KEY) !== "1");
+    } catch {
+      // Storage can be refused; showing the film is the safe default.
+    }
+  }, []);
+
+  const choose = useCallback((next: boolean) => {
+    setVisible(next);
+    try {
+      if (next) localStorage.removeItem(FILM_HIDDEN_KEY);
+      else localStorage.setItem(FILM_HIDDEN_KEY, "1");
+    } catch {
+      // Applies for this session even when it cannot be persisted.
+    }
+  }, []);
+
+  return [visible, choose];
+}

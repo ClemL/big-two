@@ -10,6 +10,7 @@ import {
   useAutoPass,
   useDoubleTap,
   useExpressTable,
+  useFilmVisible,
   useGameKeys,
   useHandLayout,
 } from "@/components/hooks";
@@ -45,6 +46,8 @@ export default function GameTable() {
   const [sortMode, setSortMode] = useState<SortMode>("rank");
   const [muted, setMuted] = useState(false);
   const [handLayout, setHandLayout] = useHandLayout();
+  const [filmVisible, setFilmVisible] = useFilmVisible();
+  const [showSettings, setShowSettings] = useState(false);
   const seenLogEntries = useRef(0);
   const dealtRound = useRef(-1);
 
@@ -218,6 +221,11 @@ export default function GameTable() {
             <h1>Big Two</h1>
             <span className="topbar__sub">Hong Kong rules · 鋤大弟</span>
           </div>
+          <div className="topbar__controls">
+            <button type="button" className="btn btn--ghost" onClick={() => setShowSettings(true)}>
+              Settings
+            </button>
+          </div>
         </header>
 
         <section className="start__panel">
@@ -240,13 +248,23 @@ export default function GameTable() {
           </div>
         </section>
 
-        <section className="start__panel start__panel--film">
-          <h2>Never played? Watch first</h2>
-          <p className="lobby__hint">
-            Three and a half minutes, hand drawn, no sound — the subtitles carry it.
-          </p>
-          <Explainer />
-        </section>
+        {filmVisible ? (
+          <section className="start__panel start__panel--film">
+            <div className="start__panelHead">
+              <h2>Never played? Watch first</h2>
+              <button
+                type="button"
+                className="btn btn--icon"
+                onClick={() => setFilmVisible(false)}
+                aria-label="Close the film"
+                title="Close — bring it back from Settings"
+              >
+                ✕
+              </button>
+            </div>
+            <Explainer />
+          </section>
+        ) : null}
 
         <section className="start__panel start__panel--table">
           <h2>Everyone round one table?</h2>
@@ -269,6 +287,24 @@ export default function GameTable() {
           </div>
           {express.error ? <p className="lobby__error">{express.error}</p> : null}
         </section>
+
+        {showSettings ? (
+          <Modal title="Settings" onClose={() => setShowSettings(false)}>
+            <label className="field">
+              <input
+                type="checkbox"
+                checked={filmVisible}
+                onChange={(e) => setFilmVisible(e.target.checked)}
+              />
+              <span>Show the how-to-play film on the start screen</span>
+            </label>
+            <div className="start__actions">
+              <button type="button" className="btn btn--primary" onClick={() => setShowSettings(false)}>
+                Done
+              </button>
+            </div>
+          </Modal>
+        ) : null}
       </main>
     );
   }
